@@ -1801,8 +1801,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   character: {fileID: 1912536073}
-  characterModel: {fileID: 0}
+  characterModel: {fileID: -8679921383154817045, guid: df6c9cb71ead73242a962933a5b9031d, type: 3}
+  terrainHolder: {fileID: 1880315460}
+  grassPrefab: {fileID: -4684228226441248569, guid: 54a4e5c7d9c20764eaa3772e71dbd57a, type: 3}
   moveDuration: 0.2
+  spawnDistance: 20
 --- !u!4 &777593952
 Transform:
   m_ObjectHideFlags: 0
@@ -3460,6 +3463,37 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 54e9699f411b7f4498c088cef2136161, type: 3}
   m_PrefabInstance: {fileID: 1635904405}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1880315459
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1880315460}
+  m_Layer: 0
+  m_Name: TerrainHolder
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1880315460
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1880315459}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1912536070
 GameObject:
   m_ObjectHideFlags: 0
@@ -4104,3 +4138,4 @@ SceneRoots:
   - {fileID: 777593952}
   - {fileID: 1912536073}
   - {fileID: 1259426376}
+  - {fileID: 1880315460}

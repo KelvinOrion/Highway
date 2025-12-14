@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -7,9 +8,14 @@ public class GameManager : MonoBehaviour
     [Header("Game objects")]
     [SerializeField] private Transform character;
     [SerializeField] private Transform characterModel;
+    [SerializeField] private Transform terrainHolder;
+
+    [Header("Terrain objects")]
+    [SerializeField] private Grass grassPrefab;
 
     [Header("Game parameters")]
     [SerializeField] private float moveDuration = 0.2f;
+    [SerializeField] private int spawnDistance = 20;
 
     //6 references
     enum GameState
@@ -20,6 +26,8 @@ public class GameManager : MonoBehaviour
     }
     private GameState gameState;
     private Vector2Int characterPos;
+    private int spawnLocation;
+    private List<(float terrainHeight, HashSet<int> locations)> obstacles = new();
 
     void Awake()
     {
@@ -34,6 +42,30 @@ public class GameManager : MonoBehaviour
         //Reset character position every new round
         characterPos = new Vector2Int(0, -1);
         character.position = new Vector3(0, 0.2f, -1);
+
+        //Remove all terrain
+        obstacles.Clear();
+        foreach (Transform child in terrainHolder)
+        {
+            Destroy(child.gameObject);
+        }
+
+        //Reset level, regenerate
+        spawnLocation = 0;
+        for (int i = 0; i < spawnDistance; i++)
+        {
+            SpawnObstacles();
+        }
+    }
+
+    private void SpawnObstacles()
+    {
+        //Create grass with terrain height of 0.2f
+        Grass grass = Instantiate(grassPrefab, terrainHolder);
+        obstacles.Add((0.2f, grass.Init(spawnLocation)));
+
+        //Update to the next location
+        spawnLocation++;
 
     }
 
@@ -84,48 +116,60 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // Update is called once per frame
-    void Update()
+    // function to move character, and build for independent from platform
+    private void TryMove(Vector2Int direction)
     {
-        // Detect arrow key presses.
-        if (gameState == GameState.Ready)
+        // Ignore empty intent
+        if (direction == Vector2Int.zero) return;
+
+        // Only move when ready
+        if (gameState != GameState.Ready) return;
+
+        Vector2Int destination = characterPos + direction;
+
+        // In v0.1 we only check start area
+        if (InStartArea(destination) || ((destination.y >= 0) && !obstacles[destination.y].locations.Contains(destination.x)))
         {
-            Vector2Int moveDirection = Vector2Int.zero;
-            // Single if/else to prevent moving diagonally.
-            if (Keyboard.current.upArrowKey.isPressed)
             {
-                character.localRotation = Quaternion.identity;
-                moveDirection.y = 1;
-            }
-            else if (Keyboard.current.downArrowKey.isPressed)
-            {
-                character.localRotation = Quaternion.Euler(0, 180, 0);
-                moveDirection.y = -1;
-            }
-            else if (Keyboard.current.leftArrowKey.isPressed)
-            {
-                character.localRotation = Quaternion.Euler(0, -90, 0);
-                moveDirection.x = -1;
-            }
-            else if (Keyboard.current.rightArrowKey.isPressed)
-            {
-                character.localRotation = Quaternion.Euler(0, 90, 0);
-                moveDirection.x = 1;
+                characterPos = destination;
+                StartCoroutine(MoveCharacter());
             }
 
-            //If the user wants to move
-            if (moveDirection != Vector2Int.zero)
+            // Spawn new obstacles if necessary
+            while (obstacles.Count < (characterPos.y + spawnDistance))
             {
-                Vector2Int destination = characterPos + moveDirection;
-                //In the start area there are no obstacles so you can move anywhere.
-                if (InStartArea(destination))
-                {
-                    //Update our character grid coordinate.
-                    characterPos = destination;
-                    //Call coroutine to move the character object.
-                    StartCoroutine(MoveCharacter());
-                }
+                SpawnObstacles();
             }
         }
     }
+
+    // Update is called once per frame
+    void Update()
+    {
+        Vector2Int moveDirection = Vector2Int.zero;
+
+        if (Keyboard.current.upArrowKey.isPressed)
+        {
+            character.localRotation = Quaternion.identity;
+            moveDirection = Vector2Int.up;
+        }
+        else if (Keyboard.current.downArrowKey.isPressed)
+        {
+            character.localRotation = Quaternion.Euler(0, 180, 0);
+            moveDirection = Vector2Int.down;
+        }
+        else if (Keyboard.current.leftArrowKey.isPressed)
+        {
+            character.localRotation = Quaternion.Euler(0, -90, 0);
+            moveDirection = Vector2Int.left;
+        }
+        else if (Keyboard.current.rightArrowKey.isPressed)
+        {
+            character.localRotation = Quaternion.Euler(0, 90, 0);
+            moveDirection = Vector2Int.right;
+        }
+
+        TryMove(moveDirection);
+    }
+
 }
