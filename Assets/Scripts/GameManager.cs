@@ -127,7 +127,7 @@ public class GameManager : MonoBehaviour
 
         Vector2Int destination = characterPos + direction;
 
-        // In v0.1 we only check start area
+        // move area
         if (InStartArea(destination) || ((destination.y >= 0) && !obstacles[destination.y].locations.Contains(destination.x)))
         {
             {
@@ -170,6 +170,16 @@ public class GameManager : MonoBehaviour
         }
 
         TryMove(moveDirection);
+
+        //  Camera follows at (4,7,-5)
+        Vector3 cameraPosition = new(character.position.x +4, 7,character.position.z -5);
+
+        //Limit camera movement in x directions.
+        // Only follow the characteras it moves to -3 and +3.
+        //The camera is offset +2 so that 2 to 7 in the camera x position.
+        cameraPosition.x = Mathf.Clamp(cameraPosition.x, 2, 7);
+
+        Camera.main.transform.position = cameraPosition;
     }
 
 }
