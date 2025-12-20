@@ -877,7 +877,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 4
+  orthographic size: 3
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -1801,9 +1801,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   character: {fileID: 1912536073}
-  characterModel: {fileID: -8679921383154817045, guid: df6c9cb71ead73242a962933a5b9031d, type: 3}
+  characterModel: {fileID: 7738306433855347034, guid: 7097f783e6822fa42a1c871a55a0cb6a, type: 3}
   terrainHolder: {fileID: 1880315460}
   grassPrefab: {fileID: -4684228226441248569, guid: 54a4e5c7d9c20764eaa3772e71dbd57a, type: 3}
+  roadPrefab: {fileID: -4120755175235499071, guid: e654c4f6cacc6ea439c7800d8df47ae7, type: 3}
   moveDuration: 0.2
   spawnDistance: 20
 --- !u!4 &777593952
@@ -2017,15 +2018,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: df6c9cb71ead73242a962933a5b9031d, type: 3}
       propertyPath: m_LocalScale.x
-      value: 0.4
+      value: 0.17
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: df6c9cb71ead73242a962933a5b9031d, type: 3}
       propertyPath: m_LocalScale.y
-      value: 0.4
+      value: 0.17
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: df6c9cb71ead73242a962933a5b9031d, type: 3}
       propertyPath: m_LocalScale.z
-      value: 0.4
+      value: 0.17
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: df6c9cb71ead73242a962933a5b9031d, type: 3}
       propertyPath: m_LocalPosition.x

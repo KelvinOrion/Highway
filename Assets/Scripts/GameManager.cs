@@ -12,6 +12,7 @@ public class GameManager : MonoBehaviour
 
     [Header("Terrain objects")]
     [SerializeField] private Grass grassPrefab;
+    [SerializeField] private Road roadPrefab;
 
     [Header("Game parameters")]
     [SerializeField] private float moveDuration = 0.2f;
@@ -60,13 +61,24 @@ public class GameManager : MonoBehaviour
 
     private void SpawnObstacles()
     {
-        //Create grass with terrain height of 0.2f
-        Grass grass = Instantiate(grassPrefab, terrainHolder);
-        obstacles.Add((0.2f, grass.Init(spawnLocation)));
+        //slowing increment the road spawn rate
+        float roadProbability = Mathf.Lerp(0.5f, 0.9f, spawnLocation / 250f);
+
+        if (Random.value < roadProbability)
+        {
+            //create road with terrain height of 0.1f
+            Road road = Instantiate(roadPrefab, terrainHolder);
+            obstacles.Add((0.1f, road.Init(spawnLocation)));
+        }
+        else
+        {
+            //Create grass with terrain height of 0.2f
+            Grass grass = Instantiate(grassPrefab, terrainHolder);
+            obstacles.Add((0.2f, grass.Init(spawnLocation)));
+        }
 
         //Update to the next location
         spawnLocation++;
-
     }
 
     private bool InStartArea(Vector2Int location)
@@ -83,6 +95,10 @@ public class GameManager : MonoBehaviour
 
         //The yHeight changes if we're on grass or road
         float yHeight = 0.2f;
+        if (characterPos.y >= 0)
+        {
+            yHeight = obstacles[characterPos.y].terrainHeight;
+        }
 
         Vector3 startPos = character.position;
         Vector3 endPos = new(characterPos.x, yHeight, characterPos.y);
