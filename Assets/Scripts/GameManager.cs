@@ -9,6 +9,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Transform character;
     [SerializeField] private Transform characterModel;
     [SerializeField] private Transform terrainHolder;
+    [SerializeField] private TMPro.TextMeshProUGUI scoreText;
 
     [Header("Terrain objects")]
     [SerializeField] private Grass grassPrefab;
@@ -17,6 +18,8 @@ public class GameManager : MonoBehaviour
     [Header("Game parameters")]
     [SerializeField] private float moveDuration = 0.2f;
     [SerializeField] private int spawnDistance = 20;
+    [SerializeField] private float shakeDuration = 0.15f;
+    [SerializeField] private float shakeMagnitude = 0.15f;
 
     //6 references
     enum GameState
@@ -28,7 +31,9 @@ public class GameManager : MonoBehaviour
     private GameState gameState;
     private Vector2Int characterPos;
     private int spawnLocation;
-    private List<(float terrainHeight, HashSet<int> locations)> obstacles = new();
+    private List<(float terrainHeight, HashSet<int> locations, GameObject obj)> obstacles = new();
+    private int score = 0;
+    private Vector3 cameraBasePos;
 
     void Awake()
     {
@@ -43,7 +48,11 @@ public class GameManager : MonoBehaviour
         //Reset character position every new round
         characterPos = new Vector2Int(0, -1);
         character.position = new Vector3(0, 0.2f, -1);
+        character.GetComponent<Character>().Reset();
 
+        // Reset score 
+        score = 0;
+        scoreText.text = "0";
         //Remove all terrain
         obstacles.Clear();
         foreach (Transform child in terrainHolder)
@@ -68,13 +77,15 @@ public class GameManager : MonoBehaviour
         {
             //create road with terrain height of 0.1f
             Road road = Instantiate(roadPrefab, terrainHolder);
-            obstacles.Add((0.1f, road.Init(spawnLocation)));
+            obstacles.Add((0.1f, road.Init(spawnLocation), road.gameObject));
+            road.gameObject.name = $"{spawnLocation} - Road";
         }
         else
         {
             //Create grass with terrain height of 0.2f
             Grass grass = Instantiate(grassPrefab, terrainHolder);
-            obstacles.Add((0.2f, grass.Init(spawnLocation)));
+            obstacles.Add((0.2f, grass.Init(spawnLocation), grass.gameObject));
+            grass.gameObject.name = $"{spawnLocation} - Grass";
         }
 
         //Update to the next location
@@ -149,15 +160,35 @@ public class GameManager : MonoBehaviour
             {
                 characterPos = destination;
                 StartCoroutine(MoveCharacter());
+                // Update score if we moved forward
+                if ((destination.y + 1) > score)
+                {
+                    score = destination.y + 1;
+                    scoreText.text = $"{score}";
+                }
             }
 
             // Spawn new obstacles if necessary
             while (obstacles.Count < (characterPos.y + spawnDistance))
             {
                 SpawnObstacles();
+
+                //Destroy old obstacles to save memory
+                int oldIndex = characterPos.y - spawnDistance;
+                if ((oldIndex >= 0) && (obstacles[oldIndex].obj != null))
+                {
+                    Destroy(obstacles[oldIndex].obj);
+                }
+            }
+
+            // If character gone too far back, end game
+            if (characterPos.y < (score - 10))
+            {
+                character.GetComponent<Character>().Kill(character.position + new Vector3(0, 0.2f, 0.5f));
             }
         }
-    }
+        }
+
 
     // Update is called once per frame
     void Update()
@@ -187,6 +218,12 @@ public class GameManager : MonoBehaviour
 
         TryMove(moveDirection);
 
+        // Can only use shortcut to restart when dead
+        if (gameState == GameState.Dead && Keyboard.current.spaceKey.wasPressedThisFrame)
+        {
+            NewLevel();
+        }
+
         //  Camera follows at (4,7,-5)
         Vector3 cameraPosition = new(character.position.x +4, 7,character.position.z -5);
 
@@ -196,6 +233,35 @@ public class GameManager : MonoBehaviour
         cameraPosition.x = Mathf.Clamp(cameraPosition.x, 2, 7);
 
         Camera.main.transform.position = cameraPosition;
+        cameraBasePos = Camera.main.transform.position;
+
+    }
+
+    public void PlayerCollision()
+    {
+        //Set game state to dead
+        gameState = GameState.Dead;
+        StartCoroutine(ScreenShake());
+        ////Disable character model
+        //characterModel.gameObject.SetActive(false);
+        ////Restart level after a delay
+        //Invoke(nameof(NewLevel), 1.0f);
+    }
+
+    private IEnumerator ScreenShake()
+    {
+        float elapsed = 0f;
+
+        while (elapsed < shakeDuration)
+        {
+            Vector3 offset = Random.insideUnitSphere * shakeMagnitude;
+            Camera.main.transform.position = cameraBasePos + offset;
+
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        Camera.main.transform.position = cameraBasePos;
     }
 
 }
