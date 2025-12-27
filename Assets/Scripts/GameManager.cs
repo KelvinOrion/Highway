@@ -34,6 +34,13 @@ public class GameManager : MonoBehaviour
     private List<(float terrainHeight, HashSet<int> locations, GameObject obj)> obstacles = new();
     private int score = 0;
     private Vector3 cameraBasePos;
+    Vector2 touchStartPos;
+    bool isTouching;
+    float swipeThreshold = 80f; // tune the swipe threshold
+    float inputLockTimer = 0f;
+    float inputLockDuration = 0.2f; // 200ms feels right on mobile
+
+
 
     void Awake()
     {
@@ -44,6 +51,8 @@ public class GameManager : MonoBehaviour
     private void NewLevel()
     {
         gameState = GameState.Ready;
+        inputLockTimer = inputLockDuration; // lock input to prevent restart + move forward in one tap
+
 
         //Reset character position every new round
         characterPos = new Vector2Int(0, -1);
@@ -61,7 +70,7 @@ public class GameManager : MonoBehaviour
         }
 
         //Reset level, regenerate
-        spawnLocation = 0;
+        spawnLocation = 0; // added two space for spawn
         for (int i = 0; i < spawnDistance; i++)
         {
             SpawnObstacles();
@@ -193,36 +202,50 @@ public class GameManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        Vector2Int moveDirection = Vector2Int.zero;
-
-        if (Keyboard.current.upArrowKey.isPressed)
+        if (inputLockTimer > 0f)
         {
-            character.localRotation = Quaternion.identity;
-            moveDirection = Vector2Int.up;
-        }
-        else if (Keyboard.current.downArrowKey.isPressed)
-        {
-            character.localRotation = Quaternion.Euler(0, 180, 0);
-            moveDirection = Vector2Int.down;
-        }
-        else if (Keyboard.current.leftArrowKey.isPressed)
-        {
-            character.localRotation = Quaternion.Euler(0, -90, 0);
-            moveDirection = Vector2Int.left;
-        }
-        else if (Keyboard.current.rightArrowKey.isPressed)
-        {
-            character.localRotation = Quaternion.Euler(0, 90, 0);
-            moveDirection = Vector2Int.right;
+            inputLockTimer -= Time.deltaTime;
+            return; // Ignore all input
         }
 
-        TryMove(moveDirection);
+        //Debug.Log("Update running");
+        HandleTouchInput();
+        //Vector2Int moveDirection = Vector2Int.zero;
 
-        // Can only use shortcut to restart when dead
-        if (gameState == GameState.Dead && Keyboard.current.spaceKey.wasPressedThisFrame)
+        //if (Keyboard.current.upArrowKey.isPressed)
+        //{
+        //    character.localRotation = Quaternion.identity;
+        //    moveDirection = Vector2Int.up;
+        //}
+        //else if (Keyboard.current.downArrowKey.isPressed)
+        //{
+        //    character.localRotation = Quaternion.Euler(0, 180, 0);
+        //    moveDirection = Vector2Int.down;
+        //}
+        //else if (Keyboard.current.leftArrowKey.isPressed)
+        //{
+        //    character.localRotation = Quaternion.Euler(0, -90, 0);
+        //    moveDirection = Vector2Int.left;
+        //}
+        //else if (Keyboard.current.rightArrowKey.isPressed)
+        //{
+        //    character.localRotation = Quaternion.Euler(0, 90, 0);
+        //    moveDirection = Vector2Int.right;
+        //}
+
+        //TryMove(moveDirection);
+
+        // (Windows) Can only use shortcut to restart when dead
+        //if (gameState == GameState.Dead && Keyboard.current.spaceKey.wasPressedThisFrame)
+        //{
+        //    NewLevel();
+        //}
+        // (Mobile) Can only use shortcut to restart when dead
+        if (gameState == GameState.Dead && Input.touchCount > 0)
         {
             NewLevel();
         }
+
 
         //  Camera follows at (4,7,-5)
         Vector3 cameraPosition = new(character.position.x +4, 7,character.position.z -5);
@@ -236,6 +259,52 @@ public class GameManager : MonoBehaviour
         cameraBasePos = Camera.main.transform.position;
 
     }
+    void HandleTouchInput()
+    {
+        if (!Application.isMobilePlatform) return;
+
+        if (Input.touchCount == 0) return;
+
+        Touch touch = Input.GetTouch(0);
+
+        switch (touch.phase)
+        {
+            case UnityEngine.TouchPhase.Began:
+                isTouching = true;
+                touchStartPos = touch.position;
+                break;
+
+            case UnityEngine.TouchPhase.Ended:
+                if (!isTouching) return;
+
+                Vector2 delta = touch.position - touchStartPos;
+                isTouching = false;
+
+                // Small movement = tap → forward
+                if (delta.magnitude < swipeThreshold)
+                {
+                    TryMove(Vector2Int.up);
+                    return;
+                }
+
+                // Horizontal swipe
+                if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
+                {
+                    TryMove(delta.x > 0 ? Vector2Int.right : Vector2Int.left);
+                }
+                // Vertical swipe
+                else
+                {
+                    if (delta.y > 0)
+                        TryMove(Vector2Int.up);
+                    else
+                        TryMove(Vector2Int.down);
+                }
+
+                break;
+        }
+    }
+
 
     public void PlayerCollision()
     {
