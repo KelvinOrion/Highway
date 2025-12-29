@@ -1,7 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 public class GameManager : MonoBehaviour
 {
@@ -16,10 +15,14 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Road roadPrefab;
 
     [Header("Game parameters")]
-    [SerializeField] private float moveDuration = 0.2f;
+    [SerializeField] private float moveDuration = 0.1f;
     [SerializeField] private int spawnDistance = 20;
     [SerializeField] private float shakeDuration = 0.15f;
     [SerializeField] private float shakeMagnitude = 0.15f;
+    [SerializeField] float deadZoneLeft = -0.5f;
+    [SerializeField] float deadZoneRight = 0.5f;
+    [SerializeField] float minCamOffset = -3f;
+    [SerializeField] float maxCamOffset = 6f;
 
     //6 references
     enum GameState
@@ -36,11 +39,13 @@ public class GameManager : MonoBehaviour
     private Vector3 cameraBasePos;
     Vector2 touchStartPos;
     bool isTouching;
-    float swipeThreshold = 80f; // tune the swipe threshold
+    float swipeThreshold = 60f; // tune the swipe threshold
     float inputLockTimer = 0f;
     float inputLockDuration = 0.2f; // 200ms feels right on mobile
-
-
+    //remove hold-based movement
+    //bool isHoldingForward = false;
+    //float forwardHoldTimer = 0f;
+    //float forwardStepInterval = 0.18f; // default speed
 
     void Awake()
     {
@@ -48,11 +53,16 @@ public class GameManager : MonoBehaviour
         NewLevel();
     }
 
+    void Start()
+    {
+        Application.targetFrameRate = 60;
+        QualitySettings.vSyncCount = 0;
+    }
+
     private void NewLevel()
     {
         gameState = GameState.Ready;
         inputLockTimer = inputLockDuration; // lock input to prevent restart + move forward in one tap
-
 
         //Reset character position every new round
         characterPos = new Vector2Int(0, -1);
@@ -75,6 +85,9 @@ public class GameManager : MonoBehaviour
         {
             SpawnObstacles();
         }
+
+        //Reset camera after player respawn
+        ResetCameraToPlayer();
     }
 
     private void SpawnObstacles()
@@ -196,7 +209,7 @@ public class GameManager : MonoBehaviour
                 character.GetComponent<Character>().Kill(character.position + new Vector3(0, 0.2f, 0.5f));
             }
         }
-        }
+    }
 
 
     // Update is called once per frame
@@ -208,8 +221,9 @@ public class GameManager : MonoBehaviour
             return; // Ignore all input
         }
 
-        //Debug.Log("Update running");
         HandleTouchInput();
+        //Debug.Log("Update running");
+
         //Vector2Int moveDirection = Vector2Int.zero;
 
         //if (Keyboard.current.upArrowKey.isPressed)
@@ -246,19 +260,50 @@ public class GameManager : MonoBehaviour
             NewLevel();
         }
 
+        ////  Camera follows at (1,6,-5)
+        //Vector3 cameraPosition = new(character.position.x + 1, 6, character.position.z - 5);
 
-        //  Camera follows at (4,7,-5)
-        Vector3 cameraPosition = new(character.position.x +4, 7,character.position.z -5);
+        ////Limit camera movement in x directions.
+        //// Only follow the characteras it moves to -3 and +3.
+        ////The camera is offset +2 so that 2 to 7 in the camera x position.
+        //cameraPosition.x = Mathf.Clamp(cameraPosition.x, 2, 7);
 
-        //Limit camera movement in x directions.
-        // Only follow the characteras it moves to -3 and +3.
-        //The camera is offset +2 so that 2 to 7 in the camera x position.
-        cameraPosition.x = Mathf.Clamp(cameraPosition.x, 2, 7);
-
-        Camera.main.transform.position = cameraPosition;
-        cameraBasePos = Camera.main.transform.position;
+        //Camera.main.transform.position = cameraPosition;
+        //cameraBasePos = Camera.main.transform.position;
 
     }
+    void LateUpdate()
+    {
+        if (gameState == GameState.Dead)
+            return;
+
+        Camera cam = Camera.main;
+        Vector3 camRight = cam.transform.right;
+
+        Vector3 camPos = cam.transform.position;
+
+        float delta = Vector3.Dot(character.position - camPos, camRight);
+
+        if (delta < deadZoneLeft)
+            camPos += camRight * (delta - deadZoneLeft);
+        else if (delta > deadZoneRight)
+            camPos += camRight * (delta - deadZoneRight);
+
+        // 🔒 Clamp along camera-right axis
+        float camOffset = Vector3.Dot(camPos, camRight);
+        camOffset = Mathf.Clamp(camOffset, minCamOffset, maxCamOffset);
+
+        // Reconstruct camera position along right axis only
+        camPos = camRight * camOffset
+               + Vector3.Project(camPos, cam.transform.forward)
+               + Vector3.Project(camPos, cam.transform.up);
+
+        cam.transform.position = camPos;
+        cameraBasePos = cam.transform.position; //set new camera base
+    }
+
+
+    //----------------Function---------------
     void HandleTouchInput()
     {
         if (!Application.isMobilePlatform) return;
@@ -305,15 +350,28 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    void ResetCameraToPlayer()
+    {
+        Camera cam = Camera.main;
+        Vector3 camPos = cam.transform.position;
+
+        // Keep current height & depth, reset horizontal framing
+        Vector3 camRight = cam.transform.right;
+        float playerOffset = Vector3.Dot(character.position, camRight);
+
+        camPos += camRight * (playerOffset - Vector3.Dot(camPos, camRight));
+
+        cam.transform.position = camPos;
+    }
 
     public void PlayerCollision()
     {
         //Set game state to dead
         gameState = GameState.Dead;
         StartCoroutine(ScreenShake());
-        ////Disable character model
-        //characterModel.gameObject.SetActive(false);
-        ////Restart level after a delay
+        //Disable character model
+        characterModel.gameObject.SetActive(false);
+        //Restart level after a delay
         //Invoke(nameof(NewLevel), 1.0f);
     }
 
@@ -324,7 +382,7 @@ public class GameManager : MonoBehaviour
         while (elapsed < shakeDuration)
         {
             Vector3 offset = Random.insideUnitSphere * shakeMagnitude;
-            Camera.main.transform.position = cameraBasePos + offset;
+            Camera.main.transform.position = cameraBasePos + new Vector3(offset.x, offset.y, 0);
 
             elapsed += Time.unscaledDeltaTime;
             yield return null;

@@ -2,7 +2,7 @@
 	"artifacts" : 
 	[
 		{
-			"path" : "C:/Users/onion/Highway 2/Library/PramData/AndroidApplicationController/Cache/com.UnityTechnologies.com.unity.template.urpblank/gradle-project/unityLibrary/build/intermediates/cxx/Debug/1p113v36/obj/arm64-v8a/libgame.so"
+			"path" : "C:/Users/Bawang/Documents/GitHub/Highway/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/4f2c4d2n/obj/arm64-v8a/libgame.so"
 		}
 	],
 	"backtrace" : 1,
@@ -73,12 +73,12 @@
 			[
 				{
 					"backtrace" : 4,
-					"path" : "C:/Users/onion/Highway 2/Library/PramData/AndroidApplicationController/Cache/com.UnityTechnologies.com.unity.template.urpblank/gradle-project/unityLibrary/src/main/cpp/GameActivity"
+					"path" : "C:/Users/Bawang/Documents/GitHub/Highway/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/cpp/GameActivity"
 				},
 				{
 					"backtrace" : 2,
 					"isSystem" : true,
-					"path" : "C:/Users/onion/.gradle/caches/8.13/transforms/1e7cc65d4e74b23bd94dca9ec0ac2eb3/transformed/jetified-games-activity-3.0.5/prefab/modules/game-activity_static/include"
+					"path" : "C:/Users/Bawang/.gradle/caches/8.13/transforms/1e7cc65d4e74b23bd94dca9ec0ac2eb3/transformed/jetified-games-activity-3.0.5/prefab/modules/game-activity_static/include"
 				}
 			],
 			"language" : "CXX",
@@ -115,7 +115,7 @@
 			},
 			{
 				"backtrace" : 2,
-				"fragment" : "C:\\Users\\onion\\.gradle\\caches\\8.13\\transforms\\1e7cc65d4e74b23bd94dca9ec0ac2eb3\\transformed\\jetified-games-activity-3.0.5\\prefab\\modules\\game-activity_static\\libs\\android.arm64-v8a\\libgame-activity_static.a",
+				"fragment" : "C:\\Users\\Bawang\\.gradle\\caches\\8.13\\transforms\\1e7cc65d4e74b23bd94dca9ec0ac2eb3\\transformed\\jetified-games-activity-3.0.5\\prefab\\modules\\game-activity_static\\libs\\android.arm64-v8a\\libgame-activity_static.a",
 				"role" : "libraries"
 			},
 			{

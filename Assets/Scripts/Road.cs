@@ -20,8 +20,8 @@ public class Road : MonoBehaviour
         //Choose the speed, we make them faster as we progress
         float minSpeed = Mathf.Lerp(1f, 5f, z / 500f);
         float maxSpeed = Mathf.Lerp(5f, 10f, z / 500f);
-        speed = Random.Range(minSpeed, maxSpeed);   
-        
+        speed = Random.Range(minSpeed, maxSpeed);
+
         //choose which vehicles, how many, how far apart they are.
         int idx = Random.Range(0, vehicles.Count);
         int vehicleCount = Random.Range(0, 5);
@@ -49,16 +49,17 @@ public class Road : MonoBehaviour
         foreach (Rigidbody vehicle in spawnedVehicles)
         {
             ///Move along road, us the RB movement so collision are handled correctly
-            Vector3 moveAmount = new(speed * direction * Time.fixedDeltaTime, 0f, 0f);  
+            Vector3 moveAmount = new(speed * direction * Time.fixedDeltaTime, 0f, 0f);
             vehicle.MovePosition(vehicle.position + moveAmount);
 
             //Wrap around when they are off camera
             Vector3 pos = vehicle.position;
-            if ((direction > 0) && (pos.x >12))
+            if ((direction > 0) && (pos.x > 12))
             {
                 pos.x = -12;
                 vehicle.position = pos;
-            } else if ((direction < 0) && (pos.x < -12))
+            }
+            else if ((direction < 0) && (pos.x < -12))
             {
                 pos.x = 12;
                 vehicle.position = pos;

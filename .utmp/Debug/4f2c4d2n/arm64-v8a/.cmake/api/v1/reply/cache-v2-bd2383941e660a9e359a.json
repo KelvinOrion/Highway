@@ -175,7 +175,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "c:/Users/onion/Highway 2/.utmp/Debug/1p113v36/arm64-v8a"
+			"value" : "c:/Users/Bawang/Documents/GitHub/Highway/.utmp/Debug/4f2c4d2n/arm64-v8a"
 		},
 		{
 			"name" : "CMAKE_CACHE_MAJOR_VERSION",
@@ -679,7 +679,7 @@
 				}
 			],
 			"type" : "UNINITIALIZED",
-			"value" : "C:\\Users\\onion\\Highway 2\\.utmp\\Debug\\1p113v36\\prefab\\arm64-v8a\\prefab"
+			"value" : "C:\\Users\\Bawang\\Documents\\GitHub\\Highway\\.utmp\\Debug\\4f2c4d2n\\prefab\\arm64-v8a\\prefab"
 		},
 		{
 			"name" : "CMAKE_GENERATOR",
@@ -739,7 +739,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "C:/Users/onion/Highway 2/Library/PramData/AndroidApplicationController/Cache/com.UnityTechnologies.com.unity.template.urpblank/gradle-project/unityLibrary/src/main/cpp"
+			"value" : "C:/Users/Bawang/Documents/GitHub/Highway/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/cpp"
 		},
 		{
 			"name" : "CMAKE_INSTALL_PREFIX",
@@ -775,7 +775,7 @@
 				}
 			],
 			"type" : "UNINITIALIZED",
-			"value" : "C:\\Users\\onion\\Highway 2\\Library\\PramData\\AndroidApplicationController\\Cache\\com.UnityTechnologies.com.unity.template.urpblank\\gradle-project\\unityLibrary\\build\\intermediates\\cxx\\Debug\\1p113v36\\obj\\arm64-v8a"
+			"value" : "C:\\Users\\Bawang\\Documents\\GitHub\\Highway\\Library\\Bee\\Android\\Prj\\IL2CPP\\Gradle\\unityLibrary\\build\\intermediates\\cxx\\Debug\\4f2c4d2n\\obj\\arm64-v8a"
 		},
 		{
 			"name" : "CMAKE_LINKER",
@@ -1047,7 +1047,7 @@
 				}
 			],
 			"type" : "UNINITIALIZED",
-			"value" : "C:\\Users\\onion\\Highway 2\\Library\\PramData\\AndroidApplicationController\\Cache\\com.UnityTechnologies.com.unity.template.urpblank\\gradle-project\\unityLibrary\\build\\intermediates\\cxx\\Debug\\1p113v36\\obj\\arm64-v8a"
+			"value" : "C:\\Users\\Bawang\\Documents\\GitHub\\Highway\\Library\\Bee\\Android\\Prj\\IL2CPP\\Gradle\\unityLibrary\\build\\intermediates\\cxx\\Debug\\4f2c4d2n\\obj\\arm64-v8a"
 		},
 		{
 			"name" : "CMAKE_SHARED_LINKER_FLAGS",
@@ -1319,7 +1319,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/Users/onion/Highway 2/.utmp/Debug/1p113v36/arm64-v8a"
+			"value" : "C:/Users/Bawang/Documents/GitHub/Highway/.utmp/Debug/4f2c4d2n/arm64-v8a"
 		},
 		{
 			"name" : "Unity_IS_TOP_LEVEL",
@@ -1343,7 +1343,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/Users/onion/Highway 2/Library/PramData/AndroidApplicationController/Cache/com.UnityTechnologies.com.unity.template.urpblank/gradle-project/unityLibrary/src/main/cpp"
+			"value" : "C:/Users/Bawang/Documents/GitHub/Highway/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/cpp"
 		},
 		{
 			"name" : "game-activity_DIR",
@@ -1355,7 +1355,7 @@
 				}
 			],
 			"type" : "PATH",
-			"value" : "C:/Users/onion/Highway 2/.utmp/Debug/1p113v36/prefab/arm64-v8a/prefab/lib/aarch64-linux-android/cmake/game-activity"
+			"value" : "C:/Users/Bawang/Documents/GitHub/Highway/.utmp/Debug/4f2c4d2n/prefab/arm64-v8a/prefab/lib/aarch64-linux-android/cmake/game-activity"
 		},
 		{
 			"name" : "game_BINARY_DIR",
@@ -1367,7 +1367,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/Users/onion/Highway 2/.utmp/Debug/1p113v36/arm64-v8a/GameActivity"
+			"value" : "C:/Users/Bawang/Documents/GitHub/Highway/.utmp/Debug/4f2c4d2n/arm64-v8a/GameActivity"
 		},
 		{
 			"name" : "game_IS_TOP_LEVEL",
@@ -1403,7 +1403,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/Users/onion/Highway 2/Library/PramData/AndroidApplicationController/Cache/com.UnityTechnologies.com.unity.template.urpblank/gradle-project/unityLibrary/src/main/cpp/GameActivity"
+			"value" : "C:/Users/Bawang/Documents/GitHub/Highway/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/src/main/cpp/GameActivity"
 		}
 	],
 	"kind" : "cache",

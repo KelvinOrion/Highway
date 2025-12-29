@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 public class Character : MonoBehaviour
@@ -12,7 +11,7 @@ public class Character : MonoBehaviour
     private void OnCollisionEnter(Collision collision)
     {
         // Only collide with vehicles if we're not already done so.
-        if(collision.gameObject.CompareTag("Vehicle") && character.activeSelf)
+        if (collision.gameObject.CompareTag("Vehicle") && character.activeSelf)
         {
             // Get the contact point of the collision
             Kill(collision.GetContact(0).point);

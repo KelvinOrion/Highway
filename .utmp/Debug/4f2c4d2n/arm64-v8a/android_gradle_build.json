@@ -1,7 +1,7 @@
 {
   "buildFiles": [
-    "C:\\Users\\Bawang\\Documents\\GitHub\\Highway\\Library\\PramData\\AndroidApplicationController\\Cache\\com.UnityTechnologies.com.unity.template.urpblank\\gradle-project\\unityLibrary\\src\\main\\cpp\\CMakeLists.txt",
-    "C:\\Users\\Bawang\\Documents\\GitHub\\Highway\\Library\\PramData\\AndroidApplicationController\\Cache\\com.UnityTechnologies.com.unity.template.urpblank\\gradle-project\\unityLibrary\\src\\main\\cpp\\GameActivity\\CMakeLists.txt"
+    "C:\\Users\\Bawang\\Documents\\GitHub\\Highway\\Library\\Bee\\Android\\Prj\\IL2CPP\\Gradle\\unityLibrary\\src\\main\\cpp\\CMakeLists.txt",
+    "C:\\Users\\Bawang\\Documents\\GitHub\\Highway\\Library\\Bee\\Android\\Prj\\IL2CPP\\Gradle\\unityLibrary\\src\\main\\cpp\\GameActivity\\CMakeLists.txt"
   ],
   "cleanCommandsComponents": [
     [
@@ -22,7 +22,7 @@
       "toolchain": "toolchain",
       "abi": "arm64-v8a",
       "artifactName": "game",
-      "output": "C:\\Users\\Bawang\\Documents\\GitHub\\Highway\\Library\\PramData\\AndroidApplicationController\\Cache\\com.UnityTechnologies.com.unity.template.urpblank\\gradle-project\\unityLibrary\\build\\intermediates\\cxx\\Debug\\4f2c4d2n\\obj\\arm64-v8a\\libgame.so",
+      "output": "C:\\Users\\Bawang\\Documents\\GitHub\\Highway\\Library\\Bee\\Android\\Prj\\IL2CPP\\Gradle\\unityLibrary\\build\\intermediates\\cxx\\Debug\\4f2c4d2n\\obj\\arm64-v8a\\libgame.so",
       "runtimeFiles": []
     }
   },
