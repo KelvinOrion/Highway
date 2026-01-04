@@ -2031,7 +2031,10 @@ MonoBehaviour:
   deadZoneLeft: -0.5
   deadZoneRight: 0.5
   minCamOffset: -3
-  maxCamOffset: 5
+  maxCamOffset: 6
+  forwardFollowStrength: 0.15
+  maxForwardOffset: 3
+  cameraOffset: {x: 2, y: 6, z: -5}
 --- !u!4 &777593952
 Transform:
   m_ObjectHideFlags: 0

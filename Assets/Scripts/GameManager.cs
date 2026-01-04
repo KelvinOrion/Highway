@@ -23,6 +23,10 @@ public class GameManager : MonoBehaviour
     [SerializeField] float deadZoneRight = 0.5f;
     [SerializeField] float minCamOffset = -3f;
     [SerializeField] float maxCamOffset = 6f;
+    [SerializeField] float forwardFollowStrength = 0.15f;
+    [SerializeField] float maxForwardOffset = 3f;
+    [SerializeField] Vector3 cameraOffset = new Vector3(2f, 6f, -5f);
+
 
     //6 references
     enum GameState
@@ -42,6 +46,8 @@ public class GameManager : MonoBehaviour
     float swipeThreshold = 60f; // tune the swipe threshold
     float inputLockTimer = 0f;
     float inputLockDuration = 0.2f; // 200ms feels right on mobile
+    float currentForwardOffset = 0f;
+    float fixedCameraY;
     //remove hold-based movement
     //bool isHoldingForward = false;
     //float forwardHoldTimer = 0f;
@@ -57,6 +63,7 @@ public class GameManager : MonoBehaviour
     {
         Application.targetFrameRate = 60;
         QualitySettings.vSyncCount = 0;
+        fixedCameraY = Camera.main.transform.position.y;
     }
 
     private void NewLevel()
@@ -88,6 +95,7 @@ public class GameManager : MonoBehaviour
 
         //Reset camera after player respawn
         ResetCameraToPlayer();
+        currentForwardOffset = 0f;
     }
 
     private void SpawnObstacles()
@@ -182,6 +190,15 @@ public class GameManager : MonoBehaviour
             {
                 characterPos = destination;
                 StartCoroutine(MoveCharacter());
+                //Move camera forwards
+                if (direction == Vector2Int.up)
+                {
+                    currentForwardOffset = Mathf.Min(
+                        currentForwardOffset + forwardFollowStrength,
+                        maxForwardOffset
+                    );
+                }
+
                 // Update score if we moved forward
                 if ((destination.y + 1) > score)
                 {
@@ -210,7 +227,6 @@ public class GameManager : MonoBehaviour
             }
         }
     }
-
 
     // Update is called once per frame
     void Update()
@@ -278,10 +294,16 @@ public class GameManager : MonoBehaviour
             return;
 
         Camera cam = Camera.main;
+
+        // Flattened camera-right (ground plane)
         Vector3 camRight = cam.transform.right;
+        camRight.y = 0f;
+        camRight.Normalize();
 
-        Vector3 camPos = cam.transform.position;
+        // START FROM BASE POSITION, NOT CURRENT
+        Vector3 camPos = cameraBasePos;
 
+        // Horizontal dead-zone logic
         float delta = Vector3.Dot(character.position - camPos, camRight);
 
         if (delta < deadZoneLeft)
@@ -289,19 +311,25 @@ public class GameManager : MonoBehaviour
         else if (delta > deadZoneRight)
             camPos += camRight * (delta - deadZoneRight);
 
-        // 🔒 Clamp along camera-right axis
+        // Clamp horizontal offset
         float camOffset = Vector3.Dot(camPos, camRight);
         camOffset = Mathf.Clamp(camOffset, minCamOffset, maxCamOffset);
 
-        // Reconstruct camera position along right axis only
-        camPos = camRight * camOffset
-               + Vector3.Project(camPos, cam.transform.forward)
-               + Vector3.Project(camPos, cam.transform.up);
+        camPos =
+            camRight * camOffset +
+            Vector3.Project(camPos, cam.transform.forward) +
+            Vector3.Project(camPos, cam.transform.up);
+
+        // Absolute forward follow (no accumulation)
+        camPos.z = character.position.z + cameraOffset.z;
 
         cam.transform.position = camPos;
-        cameraBasePos = cam.transform.position; //set new camera base
-    }
 
+        // Update base AFTER full resolution
+        cameraBasePos = camPos;
+        Debug.Log(Vector3.Dot(cameraBasePos, cam.transform.right));
+
+    }
 
     //----------------Function---------------
     void HandleTouchInput()
