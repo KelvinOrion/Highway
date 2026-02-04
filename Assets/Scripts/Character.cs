@@ -41,6 +41,15 @@ public class Character : MonoBehaviour
         character.SetActive(true);
 
         // Remove any left over particles
-        deathParticles.Clear();
+        if (deathParticles != null)
+        {
+            deathParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            deathParticles.Clear();
+        }
+
+        if (deathSound != null)
+        {
+            deathSound.Stop();
+        }
     }
 }
