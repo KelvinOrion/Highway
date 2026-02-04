@@ -86,6 +86,10 @@ public class GameManager : MonoBehaviour
         characterPos = new Vector2Int(0, -1);
         character.position = new Vector3(0, 0.2f, -1);
         character.GetComponent<Character>().Reset();
+        if (characterModel != null)
+        {
+            characterModel.gameObject.SetActive(true);
+        }
 
         // Reset score 
         score = 0;
