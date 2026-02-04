@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+//using UnityEditor.PackageManager;
 using UnityEngine;
 
 public class GameManager : MonoBehaviour
@@ -48,6 +49,7 @@ public class GameManager : MonoBehaviour
     float inputLockDuration = 0.2f; // 200ms feels right on mobile
     float currentForwardOffset = 0f;
     float fixedCameraY;
+    public GameObject deathUI;
     //remove hold-based movement
     //bool isHoldingForward = false;
     //float forwardHoldTimer = 0f;
@@ -63,13 +65,22 @@ public class GameManager : MonoBehaviour
     {
         Application.targetFrameRate = 60;
         QualitySettings.vSyncCount = 0;
-        fixedCameraY = Camera.main.transform.position.y;
+
+        Camera cam = Camera.main;
+
+        // Intention-based camera setup
+        cameraOffset = new Vector3(2f, 6f, -5f);
+        fixedCameraY = character.position.y + cameraOffset.y;
     }
 
     private void NewLevel()
     {
         gameState = GameState.Ready;
         inputLockTimer = inputLockDuration; // lock input to prevent restart + move forward in one tap
+
+        // HIDE DEATH SCREEN(prevents persistent display)
+        if (deathUI != null)
+            deathUI.SetActive(false); // Critical: cleans UI state
 
         //Reset character position every new round
         characterPos = new Vector2Int(0, -1);
@@ -297,36 +308,36 @@ public class GameManager : MonoBehaviour
 
         // Flattened camera-right (ground plane)
         Vector3 camRight = cam.transform.right;
-        camRight.y = 0f;
-        camRight.Normalize();
+        Vector3 basePos = character.position + cameraOffset;
+        basePos.y = fixedCameraY;
 
         // START FROM BASE POSITION, NOT CURRENT
-        Vector3 camPos = cameraBasePos;
+        //Vector3 camPos = cameraBasePos;
 
         // Horizontal dead-zone logic
-        float delta = Vector3.Dot(character.position - camPos, camRight);
+        float delta = Vector3.Dot(character.position - basePos, camRight);
 
         if (delta < deadZoneLeft)
-            camPos += camRight * (delta - deadZoneLeft);
+            basePos += camRight * (delta - deadZoneLeft);
         else if (delta > deadZoneRight)
-            camPos += camRight * (delta - deadZoneRight);
+            basePos += camRight * (delta - deadZoneRight);
 
         // Clamp horizontal offset
-        float camOffset = Vector3.Dot(camPos, camRight);
+        float camOffset = Vector3.Dot(basePos, camRight);
         camOffset = Mathf.Clamp(camOffset, minCamOffset, maxCamOffset);
 
-        camPos =
+        basePos =
             camRight * camOffset +
-            Vector3.Project(camPos, cam.transform.forward) +
-            Vector3.Project(camPos, cam.transform.up);
+            Vector3.Project(basePos, cam.transform.forward) +
+            Vector3.Project(basePos, cam.transform.up);
 
         // Absolute forward follow (no accumulation)
-        camPos.z = character.position.z + cameraOffset.z;
+        basePos.z = character.position.z + cameraOffset.z;
 
-        cam.transform.position = camPos;
+        cam.transform.position = basePos;
 
         // Update base AFTER full resolution
-        cameraBasePos = camPos;
+        cameraBasePos = basePos;
         Debug.Log(Vector3.Dot(cameraBasePos, cam.transform.right));
 
     }
@@ -401,6 +412,12 @@ public class GameManager : MonoBehaviour
         characterModel.gameObject.SetActive(false);
         //Restart level after a delay
         //Invoke(nameof(NewLevel), 1.0f);
+        // SHOW DEATH SCREEN + BLOCK INPUT
+        if (deathUI != null)
+            deathUI.SetActive(true); // Critical: makes death visible
+
+        // Optional: Add fade effect (if needed) 
+        // FadeIn(deathUI); // Implement your own fade
     }
 
     private IEnumerator ScreenShake()
