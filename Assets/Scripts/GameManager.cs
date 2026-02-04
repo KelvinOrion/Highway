@@ -306,40 +306,34 @@ public class GameManager : MonoBehaviour
 
         Camera cam = Camera.main;
 
-        // Flattened camera-right (ground plane)
         Vector3 camRight = cam.transform.right;
-        Vector3 basePos = character.position + cameraOffset;
-        basePos.y = fixedCameraY;
+        Vector3 camForward = cam.transform.forward;
+        Vector3 camUp = cam.transform.up;
 
-        // START FROM BASE POSITION, NOT CURRENT
-        //Vector3 camPos = cameraBasePos;
+        Vector3 targetPos = character.position + cameraOffset;
+        targetPos.y = fixedCameraY;
 
-        // Horizontal dead-zone logic
-        float delta = Vector3.Dot(character.position - basePos, camRight);
+        float characterRight = Vector3.Dot(character.position, camRight);
+        float cameraRight = Vector3.Dot(cameraBasePos, camRight);
 
-        if (delta < deadZoneLeft)
-            basePos += camRight * (delta - deadZoneLeft);
-        else if (delta > deadZoneRight)
-            basePos += camRight * (delta - deadZoneRight);
+        // Only move the camera when the character crosses the dead-zone.
+        float deltaRight = characterRight - cameraRight;
+        if (deltaRight < deadZoneLeft)
+            cameraRight = characterRight - deadZoneLeft;
+        else if (deltaRight > deadZoneRight)
+            cameraRight = characterRight - deadZoneRight;
 
-        // Clamp horizontal offset
-        float camOffset = Vector3.Dot(basePos, camRight);
-        camOffset = Mathf.Clamp(camOffset, minCamOffset, maxCamOffset);
+        cameraRight = Mathf.Clamp(cameraRight, characterRight + minCamOffset, characterRight + maxCamOffset);
 
-        basePos =
-            camRight * camOffset +
-            Vector3.Project(basePos, cam.transform.forward) +
-            Vector3.Project(basePos, cam.transform.up);
+        targetPos =
+            camRight * cameraRight +
+            camForward * Vector3.Dot(targetPos, camForward) +
+            camUp * Vector3.Dot(targetPos, camUp);
 
-        // Absolute forward follow (no accumulation)
-        basePos.z = character.position.z + cameraOffset.z;
+        targetPos.z = character.position.z + cameraOffset.z;
 
-        cam.transform.position = basePos;
-
-        // Update base AFTER full resolution
-        cameraBasePos = basePos;
-        Debug.Log(Vector3.Dot(cameraBasePos, cam.transform.right));
-
+        cam.transform.position = targetPos;
+        cameraBasePos = targetPos;
     }
 
     //----------------Function---------------
@@ -401,6 +395,7 @@ public class GameManager : MonoBehaviour
         camPos += camRight * (playerOffset - Vector3.Dot(camPos, camRight));
 
         cam.transform.position = camPos;
+        cameraBasePos = camPos;
     }
 
     public void PlayerCollision()
