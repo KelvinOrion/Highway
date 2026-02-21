@@ -26,7 +26,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] float maxCamOffset = 6f;
     [SerializeField] float forwardFollowStrength = 0.15f;
     [SerializeField] float maxForwardOffset = 3f;
-    [SerializeField] Vector3 cameraOffset = new Vector3(2f, 6f, -5f);
+    [SerializeField] Vector3 cameraOffset = new Vector3(3f, 8f, -5f);
 
 
     //6 references
@@ -45,8 +45,8 @@ public class GameManager : MonoBehaviour
     Vector2 touchStartPos;
     bool isTouching;
     float swipeThreshold = 60f; // tune the swipe threshold
-    float inputLockTimer = 0f;
-    float inputLockDuration = 0.2f; // 200ms feels right on mobile
+    float inputLockTimer = 1f;
+    float inputLockDuration = 0.4f; // 200ms feels right on mobile
     float currentForwardOffset = 0f;
     float fixedCameraY;
     public GameObject deathUI;
@@ -69,14 +69,13 @@ public class GameManager : MonoBehaviour
         Camera cam = Camera.main;
 
         // Intention-based camera setup
-        cameraOffset = new Vector3(2f, 6f, -5f);
         fixedCameraY = character.position.y + cameraOffset.y;
     }
 
     private void NewLevel()
     {
         gameState = GameState.Ready;
-        inputLockTimer = inputLockDuration; // lock input to prevent restart + move forward in one tap
+        
 
         // HIDE DEATH SCREEN(prevents persistent display)
         if (deathUI != null)
@@ -409,6 +408,7 @@ public class GameManager : MonoBehaviour
         StartCoroutine(ScreenShake());
         //Disable character model
         characterModel.gameObject.SetActive(false);
+        inputLockTimer = inputLockDuration; // lock input to prevent restart + move forward in one tap
         //Restart level after a delay
         //Invoke(nameof(NewLevel), 1.0f);
         // SHOW DEATH SCREEN + BLOCK INPUT

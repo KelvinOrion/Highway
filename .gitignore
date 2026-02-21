@@ -52,3 +52,12 @@ crash/
 
 # Editor user settings
 UserSettings/
+
+# Debug logs
+Debug/
+.utmp/
+
+# Android build outputs
+.cmake/
+.externalNativeBuild/
+build/
