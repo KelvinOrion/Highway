@@ -27,6 +27,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] float forwardFollowStrength = 0.15f;
     [SerializeField] float maxForwardOffset = 3f;
     [SerializeField] Vector3 cameraOffset = new Vector3(3f, 8f, -5f);
+    [SerializeField] private LayerMask cameraCollisionMask = ~0;
+    [SerializeField] private float cameraCollisionRadius = 0.25f;
+    [SerializeField] private float cameraCollisionPadding = 0.15f;
 
 
     //6 references
@@ -41,7 +44,10 @@ public class GameManager : MonoBehaviour
     private int spawnLocation;
     private List<(float terrainHeight, HashSet<int> locations, GameObject obj)> obstacles = new();
     private int score = 0;
+    private Camera cachedCamera;
     private Vector3 cameraBasePos;
+    private Vector3 shakeOffset;
+    private Coroutine shakeRoutine;
     Vector2 touchStartPos;
     bool isTouching;
     float swipeThreshold = 60f; // tune the swipe threshold
@@ -66,10 +72,11 @@ public class GameManager : MonoBehaviour
         Application.targetFrameRate = 60;
         QualitySettings.vSyncCount = 0;
 
-        Camera cam = Camera.main;
+        cachedCamera = Camera.main;
 
         // Intention-based camera setup
         fixedCameraY = character.position.y + cameraOffset.y;
+        ResetCameraToPlayer();
     }
 
     private void NewLevel()
@@ -304,39 +311,20 @@ public class GameManager : MonoBehaviour
     }
     void LateUpdate()
     {
-        if (gameState == GameState.Dead)
-            return;
+        if (cachedCamera == null)
+        {
+            cachedCamera = Camera.main;
+            if (cachedCamera == null)
+                return;
+        }
 
-        Camera cam = Camera.main;
+        if (gameState != GameState.Dead)
+        {
+            cameraBasePos = CalculateFollowPosition();
+        }
 
-        Vector3 camRight = cam.transform.right;
-        Vector3 camForward = cam.transform.forward;
-        Vector3 camUp = cam.transform.up;
-
-        Vector3 targetPos = character.position + cameraOffset;
-        targetPos.y = fixedCameraY;
-
-        float characterRight = Vector3.Dot(character.position, camRight);
-        float cameraRight = Vector3.Dot(cameraBasePos, camRight);
-
-        // Only move the camera when the character crosses the dead-zone.
-        float deltaRight = characterRight - cameraRight;
-        if (deltaRight < deadZoneLeft)
-            cameraRight = characterRight - deadZoneLeft;
-        else if (deltaRight > deadZoneRight)
-            cameraRight = characterRight - deadZoneRight;
-
-        cameraRight = Mathf.Clamp(cameraRight, characterRight + minCamOffset, characterRight + maxCamOffset);
-
-        targetPos =
-            camRight * cameraRight +
-            camForward * Vector3.Dot(targetPos, camForward) +
-            camUp * Vector3.Dot(targetPos, camUp);
-
-        targetPos.z = character.position.z + cameraOffset.z;
-
-        cam.transform.position = targetPos;
-        cameraBasePos = targetPos;
+        Vector3 clippedPosition = ResolveCameraCollision(cameraBasePos);
+        cachedCamera.transform.position = clippedPosition + shakeOffset;
     }
 
     //----------------Function---------------
@@ -388,24 +376,37 @@ public class GameManager : MonoBehaviour
 
     void ResetCameraToPlayer()
     {
-        Camera cam = Camera.main;
-        Vector3 camPos = cam.transform.position;
+        if (cachedCamera == null)
+        {
+            cachedCamera = Camera.main;
+            if (cachedCamera == null)
+                return;
+        }
+
+        Vector3 camPos = cachedCamera.transform.position;
 
         // Keep current height & depth, reset horizontal framing
-        Vector3 camRight = cam.transform.right;
+        Vector3 camRight = cachedCamera.transform.right;
         float playerOffset = Vector3.Dot(character.position, camRight);
 
         camPos += camRight * (playerOffset - Vector3.Dot(camPos, camRight));
+        camPos.y = fixedCameraY;
+        camPos.z = character.position.z + cameraOffset.z;
 
-        cam.transform.position = camPos;
+        cachedCamera.transform.position = camPos;
         cameraBasePos = camPos;
+        shakeOffset = Vector3.zero;
     }
 
     public void PlayerCollision()
     {
         //Set game state to dead
         gameState = GameState.Dead;
-        StartCoroutine(ScreenShake());
+        if (shakeRoutine != null)
+        {
+            StopCoroutine(shakeRoutine);
+        }
+        shakeRoutine = StartCoroutine(ScreenShake());
         //Disable character model
         characterModel.gameObject.SetActive(false);
         inputLockTimer = inputLockDuration; // lock input to prevent restart + move forward in one tap
@@ -426,13 +427,62 @@ public class GameManager : MonoBehaviour
         while (elapsed < shakeDuration)
         {
             Vector3 offset = Random.insideUnitSphere * shakeMagnitude;
-            Camera.main.transform.position = cameraBasePos + new Vector3(offset.x, offset.y, 0);
+            shakeOffset = new Vector3(offset.x, offset.y, 0f);
 
             elapsed += Time.unscaledDeltaTime;
             yield return null;
         }
 
-        Camera.main.transform.position = cameraBasePos;
+        shakeOffset = Vector3.zero;
+        shakeRoutine = null;
+    }
+
+    private Vector3 CalculateFollowPosition()
+    {
+        Vector3 camRight = cachedCamera.transform.right;
+        Vector3 camForward = cachedCamera.transform.forward;
+        Vector3 camUp = cachedCamera.transform.up;
+
+        Vector3 targetPos = character.position + cameraOffset;
+        targetPos.y = fixedCameraY;
+
+        float characterRight = Vector3.Dot(character.position, camRight);
+        float cameraRight = Vector3.Dot(cameraBasePos, camRight);
+
+        float deltaRight = characterRight - cameraRight;
+        if (deltaRight < deadZoneLeft)
+            cameraRight = characterRight - deadZoneLeft;
+        else if (deltaRight > deadZoneRight)
+            cameraRight = characterRight - deadZoneRight;
+
+        cameraRight = Mathf.Clamp(cameraRight, characterRight + minCamOffset, characterRight + maxCamOffset);
+
+        targetPos =
+            camRight * cameraRight +
+            camForward * Vector3.Dot(targetPos, camForward) +
+            camUp * Vector3.Dot(targetPos, camUp);
+
+        targetPos.z = character.position.z + cameraOffset.z;
+        return targetPos;
+    }
+
+    private Vector3 ResolveCameraCollision(Vector3 desiredCameraPos)
+    {
+        Vector3 focusPoint = character.position + Vector3.up * 1.2f;
+        Vector3 toCamera = desiredCameraPos - focusPoint;
+        float distance = toCamera.magnitude;
+
+        if (distance <= 0.001f)
+            return desiredCameraPos;
+
+        Vector3 direction = toCamera / distance;
+        if (Physics.SphereCast(focusPoint, cameraCollisionRadius, direction, out RaycastHit hit, distance, cameraCollisionMask, QueryTriggerInteraction.Ignore))
+        {
+            float clippedDistance = Mathf.Max(0f, hit.distance - cameraCollisionPadding);
+            return focusPoint + direction * clippedDistance;
+        }
+
+        return desiredCameraPos;
     }
 
 }
