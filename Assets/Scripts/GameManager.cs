@@ -9,7 +9,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Transform character;
     [SerializeField] private Transform characterModel;
     [SerializeField] private Transform terrainHolder;
+    [SerializeField] private TMPro.TextMeshProUGUI scoreLabel;
     [SerializeField] private TMPro.TextMeshProUGUI scoreText;
+    [SerializeField] private TMPro.TextMeshProUGUI finalScore;
 
     [Header("Terrain objects")]
     [SerializeField] private Grass grassPrefab;
@@ -46,7 +48,7 @@ public class GameManager : MonoBehaviour
     bool isTouching;
     float swipeThreshold = 60f; // tune the swipe threshold
     float inputLockTimer = 1f;
-    float inputLockDuration = 0.4f; // 200ms feels right on mobile
+    float inputLockDuration = 0.8f; // 200ms feels right on mobile
     float currentForwardOffset = 0f;
     float fixedCameraY;
     public GameObject deathUI;
@@ -76,13 +78,19 @@ public class GameManager : MonoBehaviour
     {
         gameState = GameState.Ready;
         
-
         // HIDE DEATH SCREEN(prevents persistent display)
         if (deathUI != null)
             deathUI.SetActive(false); // Critical: cleans UI state
 
-        //Reset character position every new round
-        characterPos = new Vector2Int(0, -1);
+        // SHOW SCORE UI when new level starts
+        if (scoreLabel != null)
+            scoreLabel.gameObject.SetActive(true);
+        if (scoreText != null)
+            scoreText.gameObject.SetActive(true);
+
+        // Reset character position every new round
+        // Keep characterPos and character.position in sync: both should represent the same logical position
+        characterPos = new Vector2Int(0, -3);
         character.position = new Vector3(0, 0.2f, -3);
         character.GetComponent<Character>().Reset();
         if (characterModel != null)
@@ -100,7 +108,7 @@ public class GameManager : MonoBehaviour
             Destroy(child.gameObject);
         }
 
-        //Reset level, regenerate
+        // Spawn terrain ahead of the character
         spawnLocation = 0;
         for (int i = 0; i < spawnDistance; i++)
         {
@@ -110,6 +118,9 @@ public class GameManager : MonoBehaviour
         //Reset camera after player respawn
         ResetCameraToPlayer();
         currentForwardOffset = 0f;
+
+        // Lock input after restarting to prevent double-tap forward bug
+        //inputLockTimer = restartInputLockDuration;
     }
 
     private void SpawnObstacles()
@@ -226,9 +237,9 @@ public class GameManager : MonoBehaviour
             {
                 SpawnObstacles();
 
-                //Destroy old obstacles to save memory
+                // Destroy old obstacles to save memory
                 int oldIndex = characterPos.y - spawnDistance;
-                if ((oldIndex >= 0) && (obstacles[oldIndex].obj != null))
+                if ((oldIndex >= 0) && (oldIndex < obstacles.Count) && (obstacles[oldIndex].obj != null))
                 {
                     Destroy(obstacles[oldIndex].obj);
                 }
@@ -252,56 +263,14 @@ public class GameManager : MonoBehaviour
         }
 
         HandleTouchInput();
-        //Debug.Log("Update running");
 
-        //Vector2Int moveDirection = Vector2Int.zero;
-
-        //if (Keyboard.current.upArrowKey.isPressed)
-        //{
-        //    character.localRotation = Quaternion.identity;
-        //    moveDirection = Vector2Int.up;
-        //}
-        //else if (Keyboard.current.downArrowKey.isPressed)
-        //{
-        //    character.localRotation = Quaternion.Euler(0, 180, 0);
-        //    moveDirection = Vector2Int.down;
-        //}
-        //else if (Keyboard.current.leftArrowKey.isPressed)
-        //{
-        //    character.localRotation = Quaternion.Euler(0, -90, 0);
-        //    moveDirection = Vector2Int.left;
-        //}
-        //else if (Keyboard.current.rightArrowKey.isPressed)
-        //{
-        //    character.localRotation = Quaternion.Euler(0, 90, 0);
-        //    moveDirection = Vector2Int.right;
-        //}
-
-        //TryMove(moveDirection);
-
-        // (Windows) Can only use shortcut to restart when dead
-        //if (gameState == GameState.Dead && Keyboard.current.spaceKey.wasPressedThisFrame)
-        //{
-        //    NewLevel();
-        //}
         // (Mobile) Can only use shortcut to restart when dead
         if (gameState == GameState.Dead && Input.touchCount > 0)
         {
             NewLevel();
         }
-
-        ////  Camera follows at (1,6,-5)
-        //Vector3 cameraPosition = new(character.position.x + 1, 6, character.position.z - 5);
-
-        ////Limit camera movement in x directions.
-        //// Only follow the characteras it moves to -3 and +3.
-        ////The camera is offset +2 so that 2 to 7 in the camera x position.
-        //cameraPosition.x = Mathf.Clamp(cameraPosition.x, 2, 7);
-
-        //Camera.main.transform.position = cameraPosition;
-        //cameraBasePos = Camera.main.transform.position;
-
     }
+
     void LateUpdate()
     {
         if (gameState == GameState.Dead)
@@ -403,20 +372,25 @@ public class GameManager : MonoBehaviour
 
     public void PlayerCollision()
     {
-        //Set game state to dead
+        // Set game state to dead
         gameState = GameState.Dead;
         StartCoroutine(ScreenShake());
-        //Disable character model
+        // Disable character model
         characterModel.gameObject.SetActive(false);
-        inputLockTimer = inputLockDuration; // lock input to prevent restart + move forward in one tap
-        //Restart level after a delay
-        //Invoke(nameof(NewLevel), 1.0f);
-        // SHOW DEATH SCREEN + BLOCK INPUT
-        if (deathUI != null)
-            deathUI.SetActive(true); // Critical: makes death visible
+        inputLockTimer = inputLockDuration;
 
-        // Optional: Add fade effect (if needed) 
-        // FadeIn(deathUI); // Implement your own fade
+        // HIDE SCORE UI when player dies
+        if (scoreLabel != null)
+            scoreLabel.gameObject.SetActive(false);
+        if (scoreText != null)
+            scoreText.gameObject.SetActive(false);
+
+        // Update final score display and show death screen
+        if (deathUI != null)
+        {
+            finalScore.text = scoreText.text; // Update final score display
+            deathUI.SetActive(true); // Critical: makes death visible
+        }
     }
 
     private IEnumerator ScreenShake()
@@ -434,5 +408,4 @@ public class GameManager : MonoBehaviour
 
         Camera.main.transform.position = cameraBasePos;
     }
-
 }

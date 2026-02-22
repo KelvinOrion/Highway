@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 4943754101599217160}
   - component: {fileID: 8078301110316988040}
   m_Layer: 8
-  m_Name: Cube (1)
+  m_Name: Grass Left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -28,8 +28,8 @@ Transform:
   m_GameObject: {fileID: 612436970382552326}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 15, y: 0.1, z: 0}
-  m_LocalScale: {x: 11, y: 0.2, z: 1}
+  m_LocalPosition: {x: 19, y: 0.1, z: 0}
+  m_LocalScale: {x: 19, y: 0.2, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 7061566212954204141}
@@ -179,7 +179,7 @@ GameObject:
   - component: {fileID: 6908475874470348693}
   - component: {fileID: 6959334760737188390}
   m_Layer: 8
-  m_Name: Cube (3)
+  m_Name: Playable
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -291,7 +291,7 @@ GameObject:
   - component: {fileID: 853891109259397545}
   - component: {fileID: 1330421046767619599}
   m_Layer: 8
-  m_Name: Cube (2)
+  m_Name: Grass Right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -306,8 +306,8 @@ Transform:
   m_GameObject: {fileID: 4352147351695101079}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -15, y: 0.1, z: 0}
-  m_LocalScale: {x: 11, y: 0.2, z: 1}
+  m_LocalPosition: {x: -19, y: 0.1, z: 0}
+  m_LocalScale: {x: 19, y: 0.2, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 7061566212954204141}

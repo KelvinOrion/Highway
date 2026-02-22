@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 4943754101599217160}
   - component: {fileID: 8078301110316988040}
   m_Layer: 8
-  m_Name: Cube (1)
+  m_Name: Road Right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -28,8 +28,8 @@ Transform:
   m_GameObject: {fileID: 612436970382552326}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 15, y: 0, z: 0}
-  m_LocalScale: {x: 11, y: 0.2, z: 1}
+  m_LocalPosition: {x: 19, y: 0, z: 0}
+  m_LocalScale: {x: 19, y: 0.2, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 7061566212954204141}
@@ -67,7 +67,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 0d983ca512dcf404b9a1d8ec668f7234, type: 2}
+  - {fileID: 2100000, guid: d6cc9a1199db09d48a58b8fcad7761fd, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -177,7 +177,7 @@ GameObject:
   - component: {fileID: 853891109259397545}
   - component: {fileID: 1330421046767619599}
   m_Layer: 8
-  m_Name: Cube (2)
+  m_Name: Road Left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -192,8 +192,8 @@ Transform:
   m_GameObject: {fileID: 4352147351695101079}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -15, y: 0, z: 0}
-  m_LocalScale: {x: 11, y: 0.2, z: 1}
+  m_LocalPosition: {x: -19, y: 0, z: 0}
+  m_LocalScale: {x: 19, y: 0.2, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 7061566212954204141}
@@ -231,7 +231,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 0d983ca512dcf404b9a1d8ec668f7234, type: 2}
+  - {fileID: 2100000, guid: d6cc9a1199db09d48a58b8fcad7761fd, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -289,7 +289,7 @@ GameObject:
   - component: {fileID: 3760731564291815065}
   - component: {fileID: 3498785728728805823}
   m_Layer: 8
-  m_Name: Cube
+  m_Name: Playable
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -343,7 +343,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: f517ff9273a4aef4387d2872d6a06b75, type: 2}
+  - {fileID: 2100000, guid: d6cc9a1199db09d48a58b8fcad7761fd, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
