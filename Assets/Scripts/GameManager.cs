@@ -17,7 +17,7 @@ public class GameManager : MonoBehaviour
 
     [Header("Game parameters")]
     [SerializeField] private float moveDuration = 0.1f;
-    [SerializeField] private int spawnDistance = 20;
+    [SerializeField] private int spawnDistance = 25;
     [SerializeField] private float shakeDuration = 0.15f;
     [SerializeField] private float shakeMagnitude = 0.15f;
     [SerializeField] float deadZoneLeft = -0.5f;
@@ -26,7 +26,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] float maxCamOffset = 6f;
     [SerializeField] float forwardFollowStrength = 0.15f;
     [SerializeField] float maxForwardOffset = 3f;
-    [SerializeField] Vector3 cameraOffset = new Vector3(3f, 8f, -5f);
+    [SerializeField] Vector3 cameraOffset = new Vector3(3f, 9f, -5f);
 
 
     //6 references
@@ -83,7 +83,7 @@ public class GameManager : MonoBehaviour
 
         //Reset character position every new round
         characterPos = new Vector2Int(0, -1);
-        character.position = new Vector3(0, 0.2f, -1);
+        character.position = new Vector3(0, 0.2f, -3);
         character.GetComponent<Character>().Reset();
         if (characterModel != null)
         {
@@ -101,7 +101,7 @@ public class GameManager : MonoBehaviour
         }
 
         //Reset level, regenerate
-        spawnLocation = 0; // added two space for spawn
+        spawnLocation = 0;
         for (int i = 0; i < spawnDistance; i++)
         {
             SpawnObstacles();
@@ -139,7 +139,7 @@ public class GameManager : MonoBehaviour
     private bool InStartArea(Vector2Int location)
     {
         //Movement anywhere in the starting region is aligned.
-        if ((location.y > -5) && (location.y < 0) && (location.x > -6) && (location.x < 6)) { return true; }
+        if ((location.y > -5) && (location.y < 0) && (location.x > -10) && (location.x < 10)) { return true; }
         return false;
     }
 

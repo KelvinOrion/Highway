@@ -11,7 +11,7 @@ public class Grass : MonoBehaviour
         transform.position = new Vector3(0, 0, z);
 
         // We always have obstacles outside the game area.
-        HashSet<int> locations = new() { -6, 6 };
+        HashSet<int> locations = new() { -10, 10 };
 
         // Populate with some obstacles
         int numTrees = Random.Range(1, 5);

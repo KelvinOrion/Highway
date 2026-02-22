@@ -18,8 +18,8 @@ public class Road : MonoBehaviour
         direction = 2 * Random.Range(0, 2) - 1;
 
         //Choose the speed, we make them faster as we progress
-        float minSpeed = Mathf.Lerp(1f, 5f, z / 500f);
-        float maxSpeed = Mathf.Lerp(5f, 10f, z / 500f);
+        float minSpeed = Mathf.Lerp(1f, 3f, z / 500f);
+        float maxSpeed = Mathf.Lerp(5f, 8f, z / 500f);
         speed = Random.Range(minSpeed, maxSpeed);
 
         //choose which vehicles, how many, how far apart they are.
@@ -40,7 +40,7 @@ public class Road : MonoBehaviour
         }
 
         //The only obstacles are outside the game area
-        return new() { -6, 6 };
+        return new() { -10, 10 };
     }
 
     private void FixedUpdate()
@@ -54,14 +54,14 @@ public class Road : MonoBehaviour
 
             //Wrap around when they are off camera
             Vector3 pos = vehicle.position;
-            if ((direction > 0) && (pos.x > 12))
+            if ((direction > 0) && (pos.x > 15))
             {
-                pos.x = -12;
+                pos.x = -15;
                 vehicle.position = pos;
             }
-            else if ((direction < 0) && (pos.x < -12))
+            else if ((direction < 0) && (pos.x < -15))
             {
-                pos.x = 12;
+                pos.x = 15;
                 vehicle.position = pos;
             }
         }
