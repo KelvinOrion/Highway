@@ -4,6 +4,12 @@ using UnityEngine;
 public class Road : MonoBehaviour
 {
     [SerializeField] private List<Rigidbody> vehicles;
+    
+    // Per-vehicle height offsets (default 0.1f for road surface, adjust if asset has different pivot)
+    [SerializeField] private List<float> vehicleHeightOffsets = new();
+    
+    // Per-vehicle rotation offset (in case you have mixed assets with different orientations)
+    [SerializeField] private List<float> vehicleRotationOffsets = new();
 
     private int direction = 1;
     private float speed = 1f;
@@ -19,21 +25,30 @@ public class Road : MonoBehaviour
 
         //Choose the speed, we make them faster as we progress
         float minSpeed = Mathf.Lerp(1f, 3f, z / 500f);
-        float maxSpeed = Mathf.Lerp(5f, 8f, z / 500f);
+        float maxSpeed = Mathf.Lerp(3f, 8f, z / 500f);
         speed = Random.Range(minSpeed, maxSpeed);
 
         //choose which vehicles, how many, how far apart they are.
         int idx = Random.Range(0, vehicles.Count);
-        int vehicleCount = Random.Range(0, 5);
-        float gap = Random.Range(2f, 6f);
+        int vehicleCount = Random.Range(0, 4);
+        float gap = Random.Range(2f, 8f);
 
-        //Initantiate the vehicles
+        //Instantiate the vehicles with adjusted rotation and height per asset type
         for (int i = 0; i < vehicleCount; i++)
         {
+            // Get height offset for this vehicle type (default to 0.1f if not set)
+            float heightOffset = (idx < vehicleHeightOffsets.Count) ? vehicleHeightOffsets[idx] : 0.1f;
+            
+            // Get rotation offset for this vehicle type (default to 0 if not set)
+            float rotationOffset = (idx < vehicleRotationOffsets.Count) ? vehicleRotationOffsets[idx] : 0f;
+            
+            // Apply rotation: base direction + per-vehicle offset
+            Quaternion rotation = Quaternion.Euler(0f, (90f * direction) + rotationOffset, 0f);
+            
             Rigidbody vehicle = Instantiate(
                 vehicles[idx],
-                new Vector3((i * gap) * -direction, 0.1f, z),
-                Quaternion.Euler(0f, 90 * direction, 0f),
+                new Vector3((i * gap) * -direction, heightOffset, z),
+                rotation,
                 transform
                 );
             spawnedVehicles.Add(vehicle);
@@ -48,7 +63,7 @@ public class Road : MonoBehaviour
         //Move vehicles
         foreach (Rigidbody vehicle in spawnedVehicles)
         {
-            ///Move along road, us the RB movement so collision are handled correctly
+            ///Move along road, use the RB movement so collision are handled correctly
             Vector3 moveAmount = new(speed * direction * Time.fixedDeltaTime, 0f, 0f);
             vehicle.MovePosition(vehicle.position + moveAmount);
 
@@ -65,6 +80,5 @@ public class Road : MonoBehaviour
                 vehicle.position = pos;
             }
         }
-
     }
 }

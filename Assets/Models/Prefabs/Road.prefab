@@ -164,6 +164,19 @@ MonoBehaviour:
   - {fileID: 5113460328888502543, guid: 066777abca5424d4f83ac2534ef9737e, type: 3}
   - {fileID: 6606540143813255742, guid: 430161996f73e7b44bab534a27b535f7, type: 3}
   - {fileID: 5192676890862465097, guid: 738b8dfedcb21e8428a06e23ed24042d, type: 3}
+  - {fileID: 943712395958102394, guid: 72ffa235579be8a49bc0ff16889dfa4b, type: 3}
+  vehicleHeightOffsets:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0.5
+  vehicleRotationOffsets:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 90
 --- !u!1 &4352147351695101079
 GameObject:
   m_ObjectHideFlags: 0

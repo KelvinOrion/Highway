@@ -4993,6 +4993,7 @@ MonoBehaviour:
   forwardFollowStrength: 0.15
   maxForwardOffset: 3
   cameraOffset: {x: 3, y: 9, z: -5}
+  restartTapLockDuration: 0.12
   deathUI: {fileID: 1814274400}
 --- !u!4 &777593952
 Transform:
