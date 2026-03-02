@@ -109,8 +109,12 @@ public class GameManager : MonoBehaviour
         }
 
         // Spawn terrain ahead of the character
+        // First tile (spawnLocation = 0) is always a road to ensure smooth gameplay transition
         spawnLocation = 0;
-        for (int i = 0; i < spawnDistance; i++)
+        SpawnRoad(); // Force first tile to be a road with proper car mechanics
+        
+        // Spawn remaining tiles with random terrain
+        for (int i = 1; i < spawnDistance; i++)
         {
             SpawnObstacles();
         }
@@ -123,27 +127,38 @@ public class GameManager : MonoBehaviour
         //inputLockTimer = restartInputLockDuration;
     }
 
+    private void SpawnRoad()
+    {
+        // Force spawn a road at the current spawnLocation
+        Road road = Instantiate(roadPrefab, terrainHolder);
+        obstacles.Add((0.1f, road.Init(spawnLocation), road.gameObject));
+        road.gameObject.name = $"{spawnLocation} - Road (Forced)";
+        
+        //Update to the next location
+        spawnLocation++;
+    }
+
     private void SpawnObstacles()
     {
-        //slowing increment the road spawn rate
-        float roadProbability = Mathf.Lerp(0.5f, 0.9f, spawnLocation / 250f);
+        // Gradually increase road probability as player progresses
+        float roadProbability = Mathf.Lerp(0.3f, 0.5f, spawnLocation / 250f);
 
         if (Random.value < roadProbability)
         {
-            //create road with terrain height of 0.1f
+            // Create road with terrain height of 0.1f
             Road road = Instantiate(roadPrefab, terrainHolder);
             obstacles.Add((0.1f, road.Init(spawnLocation), road.gameObject));
             road.gameObject.name = $"{spawnLocation} - Road";
         }
         else
         {
-            //Create grass with terrain height of 0.2f
+            // Create grass with terrain height of 0.2f
             Grass grass = Instantiate(grassPrefab, terrainHolder);
             obstacles.Add((0.2f, grass.Init(spawnLocation), grass.gameObject));
             grass.gameObject.name = $"{spawnLocation} - Grass";
         }
 
-        //Update to the next location
+        // Update to the next location
         spawnLocation++;
     }
 
@@ -161,7 +176,7 @@ public class GameManager : MonoBehaviour
 
         //The yHeight changes if we're on grass or road
         float yHeight = 0.2f;
-        if (characterPos.y >= 0)
+        if (characterPos.y >= 0 && characterPos.y < obstacles.Count)
         {
             yHeight = obstacles[characterPos.y].terrainHeight;
         }
@@ -178,7 +193,8 @@ public class GameManager : MonoBehaviour
             Vector3 newPos = Vector3.Lerp(startPos, endPos, percent);
 
             //Make character jump in an arc
-            newPos.y = yHeight = (0.5f * Mathf.Sin(Mathf.PI * percent));
+            float arcHeight = 0.5f * Mathf.Sin(Mathf.PI * percent);
+            newPos.y = yHeight + arcHeight;
             character.position = newPos;
 
             //Update elapsed time
@@ -210,7 +226,7 @@ public class GameManager : MonoBehaviour
         Vector2Int destination = characterPos + direction;
 
         // move area
-        if (InStartArea(destination) || ((destination.y >= 0) && !obstacles[destination.y].locations.Contains(destination.x)))
+        if (InStartArea(destination) || ((destination.y >= 0) && (destination.y < obstacles.Count) && !obstacles[destination.y].locations.Contains(destination.x)))
         {
             {
                 characterPos = destination;
@@ -256,11 +272,11 @@ public class GameManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (inputLockTimer > 0f)
-        {
-            inputLockTimer -= Time.deltaTime;
-            return; // Ignore all input
-        }
+        //if (inputLockTimer > 0f)
+        //{
+        //    inputLockTimer -= Time.deltaTime;
+        //    return; // Ignore all input
+        //}
 
         HandleTouchInput();
 

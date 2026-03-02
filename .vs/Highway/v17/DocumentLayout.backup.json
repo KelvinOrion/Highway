@@ -3,16 +3,16 @@
   "WorkspaceRootPath": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|c:\\users\\onion\\documents\\github\\highway\\assets\\scripts\\grass.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\grass.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|c:\\users\\onion\\documents\\github\\highway\\assets\\scripts\\road.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\road.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|c:\\users\\onion\\documents\\github\\highway\\assets\\scripts\\gamemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|C:\\Users\\onion\\Documents\\GitHub\\Highway\\assets\\scripts\\gamemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\gamemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|c:\\users\\onion\\documents\\github\\highway\\assets\\scripts\\character.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\character.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|C:\\Users\\onion\\Documents\\GitHub\\Highway\\assets\\scripts\\road.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\road.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -22,11 +22,11 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 2,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "Road.cs",
               "DocumentMoniker": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Assets\\Scripts\\Road.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\Road.cs",
@@ -35,31 +35,30 @@
               "ViewState": "AgIAAA0AAAAAAAAAAAAQwBIAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-02-21T12:49:30.575Z",
-              "IsPinned": true,
+              "IsPinned": true
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Character.cs",
+              "DocumentMoniker": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Assets\\Scripts\\Character.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\Character.cs",
+              "ToolTip": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Assets\\Scripts\\Character.cs",
+              "RelativeToolTip": "Assets\\Scripts\\Character.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAADIAAAAJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-22T08:13:02.407Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "Grass.cs",
-              "DocumentMoniker": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Assets\\Scripts\\Grass.cs",
-              "RelativeDocumentMoniker": "Assets\\Scripts\\Grass.cs",
-              "ToolTip": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Assets\\Scripts\\Grass.cs",
-              "RelativeToolTip": "Assets\\Scripts\\Grass.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAlAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-02-21T12:57:56.08Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
               "Title": "GameManager.cs",
               "DocumentMoniker": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Assets\\Scripts\\GameManager.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\GameManager.cs",
               "ToolTip": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Assets\\Scripts\\GameManager.cs",
               "RelativeToolTip": "Assets\\Scripts\\GameManager.cs",
-              "ViewState": "AgIAABsAAAAAAAAAAAAhwDAAAAAbAAAAAAAAAA==",
+              "ViewState": "AgIAAFoAAAAAAAAAAAAAAHoAAAAKAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-01-31T12:20:41.587Z",
               "EditorCaption": ""
