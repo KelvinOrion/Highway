@@ -17,6 +17,8 @@ public class Character : MonoBehaviour
 
     public void PlayDeathFeedback(Vector3 collisionPoint)
     {
+        character.SetActive(false);
+
         deathParticles.transform.position = collisionPoint;
         deathParticles.transform.LookAt(transform.position + Vector3.up);
         deathParticles.Play(true);

@@ -34,6 +34,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] float forwardFollowStrength = 0.15f;
     [SerializeField] float maxForwardOffset = 3f;
     [SerializeField] Vector3 cameraOffset = new Vector3(3f, 9f, -5f);
+    [SerializeField] private float restartTapLockDuration = 0.12f;
 
     enum GameState
     {
@@ -63,6 +64,7 @@ public class GameManager : MonoBehaviour
     private bool isMoving;
     private bool hasDied;
     private bool waitForTouchRelease;
+    private float deadRestartLockTimer;
     private float swipeThreshold = 60f;
     private float currentForwardOffset = 0f;
     private float fixedCameraY;
@@ -90,6 +92,7 @@ public class GameManager : MonoBehaviour
         waitForTouchRelease = true;
         isTouching = false;
         isMoving = false;
+        deadRestartLockTimer = 0f;
 
         if (deathUI != null)
             deathUI.SetActive(false);
@@ -239,6 +242,11 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
+        if (deadRestartLockTimer > 0f)
+        {
+            deadRestartLockTimer = Mathf.Max(0f, deadRestartLockTimer - Time.unscaledDeltaTime);
+        }
+
         HandleTouchInput();
     }
 
@@ -295,6 +303,12 @@ public class GameManager : MonoBehaviour
             {
                 waitForTouchRelease = false;
             }
+            return InputAction.None;
+        }
+
+        if (gameState == GameState.Dead && deadRestartLockTimer > 0f)
+        {
+            isTouching = false;
             return InputAction.None;
         }
 
@@ -367,6 +381,8 @@ public class GameManager : MonoBehaviour
         hasDied = true;
         gameState = GameState.Dead;
         isMoving = false;
+        waitForTouchRelease = true;
+        deadRestartLockTimer = restartTapLockDuration;
 
         Vector3 deathPoint = character.position + new Vector3(0, 0.2f, 0.5f);
         if (type == DeathType.VehicleCollision)
