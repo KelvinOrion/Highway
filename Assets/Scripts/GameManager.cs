@@ -1,7 +1,12 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-//using UnityEditor.PackageManager;
 using UnityEngine;
+
+public enum DeathType
+{
+    VehicleCollision,
+    BacktrackLimit
+}
 
 public class GameManager : MonoBehaviour
 {
@@ -30,36 +35,43 @@ public class GameManager : MonoBehaviour
     [SerializeField] float maxForwardOffset = 3f;
     [SerializeField] Vector3 cameraOffset = new Vector3(3f, 9f, -5f);
 
-
-    //6 references
     enum GameState
     {
-        Ready,
-        Moving,
-        Dead
+        Playing,
+        Dead,
+        Restarting
     }
+
+    private enum InputAction
+    {
+        None,
+        Restart,
+        MoveUp,
+        MoveDown,
+        MoveLeft,
+        MoveRight
+    }
+
     private GameState gameState;
     private Vector2Int characterPos;
     private int spawnLocation;
     private List<(float terrainHeight, HashSet<int> locations, GameObject obj)> obstacles = new();
     private int score = 0;
     private Vector3 cameraBasePos;
-    Vector2 touchStartPos;
-    bool isTouching;
-    float swipeThreshold = 60f; // tune the swipe threshold
-    float inputLockTimer = 1f;
-    float inputLockDuration = 0.8f; // 200ms feels right on mobile
-    float currentForwardOffset = 0f;
-    float fixedCameraY;
+    private Vector2 touchStartPos;
+    private bool isTouching;
+    private bool isMoving;
+    private bool hasDied;
+    private bool waitForTouchRelease;
+    private float swipeThreshold = 60f;
+    private float currentForwardOffset = 0f;
+    private float fixedCameraY;
+    private Character characterController;
     public GameObject deathUI;
-    //remove hold-based movement
-    //bool isHoldingForward = false;
-    //float forwardHoldTimer = 0f;
-    //float forwardStepInterval = 0.18f; // default speed
 
     void Awake()
     {
-        //Initialise all the starting state/
+        characterController = character.GetComponent<Character>();
         NewLevel();
     }
 
@@ -68,113 +80,93 @@ public class GameManager : MonoBehaviour
         Application.targetFrameRate = 60;
         QualitySettings.vSyncCount = 0;
 
-        Camera cam = Camera.main;
-
-        // Intention-based camera setup
         fixedCameraY = character.position.y + cameraOffset.y;
     }
 
     private void NewLevel()
     {
-        gameState = GameState.Ready;
-        
-        // HIDE DEATH SCREEN(prevents persistent display)
-        if (deathUI != null)
-            deathUI.SetActive(false); // Critical: cleans UI state
+        gameState = GameState.Restarting;
+        hasDied = false;
+        waitForTouchRelease = true;
+        isTouching = false;
+        isMoving = false;
 
-        // SHOW SCORE UI when new level starts
+        if (deathUI != null)
+            deathUI.SetActive(false);
+
         if (scoreLabel != null)
             scoreLabel.gameObject.SetActive(true);
         if (scoreText != null)
             scoreText.gameObject.SetActive(true);
 
-        // Reset character position every new round
-        // Keep characterPos and character.position in sync: both should represent the same logical position
         characterPos = new Vector2Int(0, -3);
         character.position = new Vector3(0, 0.2f, -3);
-        character.GetComponent<Character>().Reset();
+        characterController.ResetCharacter();
         if (characterModel != null)
         {
             characterModel.gameObject.SetActive(true);
         }
 
-        // Reset score 
         score = 0;
         scoreText.text = "0";
-        //Remove all terrain
+
         obstacles.Clear();
         foreach (Transform child in terrainHolder)
         {
             Destroy(child.gameObject);
         }
 
-        // Spawn terrain ahead of the character
-        // First tile (spawnLocation = 0) is always a road to ensure smooth gameplay transition
         spawnLocation = 0;
-        SpawnRoad(); // Force first tile to be a road with proper car mechanics
-        
-        // Spawn remaining tiles with random terrain
+        SpawnRoad();
+
         for (int i = 1; i < spawnDistance; i++)
         {
             SpawnObstacles();
         }
 
-        //Reset camera after player respawn
         ResetCameraToPlayer();
         currentForwardOffset = 0f;
-
-        // Lock input after restarting to prevent double-tap forward bug
-        //inputLockTimer = restartInputLockDuration;
     }
 
     private void SpawnRoad()
     {
-        // Force spawn a road at the current spawnLocation
         Road road = Instantiate(roadPrefab, terrainHolder);
         obstacles.Add((0.1f, road.Init(spawnLocation), road.gameObject));
         road.gameObject.name = $"{spawnLocation} - Road (Forced)";
-        
-        //Update to the next location
         spawnLocation++;
     }
 
     private void SpawnObstacles()
     {
-        // Gradually increase road probability as player progresses
         float roadProbability = Mathf.Lerp(0.3f, 0.5f, spawnLocation / 250f);
 
         if (Random.value < roadProbability)
         {
-            // Create road with terrain height of 0.1f
             Road road = Instantiate(roadPrefab, terrainHolder);
             obstacles.Add((0.1f, road.Init(spawnLocation), road.gameObject));
             road.gameObject.name = $"{spawnLocation} - Road";
         }
         else
         {
-            // Create grass with terrain height of 0.2f
             Grass grass = Instantiate(grassPrefab, terrainHolder);
             obstacles.Add((0.2f, grass.Init(spawnLocation), grass.gameObject));
             grass.gameObject.name = $"{spawnLocation} - Grass";
         }
 
-        // Update to the next location
         spawnLocation++;
     }
 
     private bool InStartArea(Vector2Int location)
     {
-        //Movement anywhere in the starting region is aligned.
         if ((location.y > -5) && (location.y < 0) && (location.x > -10) && (location.x < 10)) { return true; }
         return false;
     }
 
     private IEnumerator MoveCharacter()
     {
-        gameState = GameState.Moving;
+        isMoving = true;
         float elapsedTime = 0f;
 
-        //The yHeight changes if we're on grass or road
         float yHeight = 0.2f;
         if (characterPos.y >= 0 && characterPos.y < obstacles.Count)
         {
@@ -186,74 +178,51 @@ public class GameManager : MonoBehaviour
 
         while (elapsedTime < moveDuration)
         {
-            //How far through the animation are we
             float percent = elapsedTime / moveDuration;
-
-            //Update character position
             Vector3 newPos = Vector3.Lerp(startPos, endPos, percent);
 
-            //Make character jump in an arc
             float arcHeight = 0.5f * Mathf.Sin(Mathf.PI * percent);
             newPos.y = yHeight + arcHeight;
             character.position = newPos;
 
-            //Update elapsed time
             elapsedTime += Time.deltaTime;
-
             yield return null;
         }
 
-        //Ensure we're at the end
         character.position = endPos;
-
-        //Need to check we're still in moving at the end.
-        //If we're dead we don't want to go back to ready.
-        if (gameState == GameState.Moving)
-        {
-            gameState = GameState.Ready;
-        }
+        isMoving = false;
     }
 
-    // function to move character, and build for independent from platform
     private void TryMove(Vector2Int direction)
     {
-        // Ignore empty intent
         if (direction == Vector2Int.zero) return;
-
-        // Only move when ready
-        if (gameState != GameState.Ready) return;
+        if (gameState != GameState.Playing || isMoving || hasDied) return;
 
         Vector2Int destination = characterPos + direction;
 
-        // move area
         if (InStartArea(destination) || ((destination.y >= 0) && (destination.y < obstacles.Count) && !obstacles[destination.y].locations.Contains(destination.x)))
         {
-            {
-                characterPos = destination;
-                StartCoroutine(MoveCharacter());
-                //Move camera forwards
-                if (direction == Vector2Int.up)
-                {
-                    currentForwardOffset = Mathf.Min(
-                        currentForwardOffset + forwardFollowStrength,
-                        maxForwardOffset
-                    );
-                }
+            characterPos = destination;
+            StartCoroutine(MoveCharacter());
 
-                // Update score if we moved forward
-                if ((destination.y + 1) > score)
-                {
-                    score = destination.y + 1;
-                    scoreText.text = $"{score}";
-                }
+            if (direction == Vector2Int.up)
+            {
+                currentForwardOffset = Mathf.Min(
+                    currentForwardOffset + forwardFollowStrength,
+                    maxForwardOffset
+                );
             }
 
-            // Spawn new obstacles if necessary
+            if ((destination.y + 1) > score)
+            {
+                score = destination.y + 1;
+                scoreText.text = $"{score}";
+            }
+
             while (obstacles.Count < (characterPos.y + spawnDistance))
             {
                 SpawnObstacles();
 
-                // Destroy old obstacles to save memory
                 int oldIndex = characterPos.y - spawnDistance;
                 if ((oldIndex >= 0) && (oldIndex < obstacles.Count) && (obstacles[oldIndex].obj != null))
                 {
@@ -261,30 +230,16 @@ public class GameManager : MonoBehaviour
                 }
             }
 
-            // If character gone too far back, end game
             if (characterPos.y < (score - 10))
             {
-                character.GetComponent<Character>().Kill(character.position + new Vector3(0, 0.2f, 0.5f));
+                Die(DeathType.BacktrackLimit);
             }
         }
     }
 
-    // Update is called once per frame
     void Update()
     {
-        //if (inputLockTimer > 0f)
-        //{
-        //    inputLockTimer -= Time.deltaTime;
-        //    return; // Ignore all input
-        //}
-
         HandleTouchInput();
-
-        // (Mobile) Can only use shortcut to restart when dead
-        if (gameState == GameState.Dead && Input.touchCount > 0)
-        {
-            NewLevel();
-        }
     }
 
     void LateUpdate()
@@ -304,7 +259,6 @@ public class GameManager : MonoBehaviour
         float characterRight = Vector3.Dot(character.position, camRight);
         float cameraRight = Vector3.Dot(cameraBasePos, camRight);
 
-        // Only move the camera when the character crosses the dead-zone.
         float deltaRight = characterRight - cameraRight;
         if (deltaRight < deadZoneLeft)
             cameraRight = characterRight - deadZoneLeft;
@@ -324,50 +278,119 @@ public class GameManager : MonoBehaviour
         cameraBasePos = targetPos;
     }
 
-    //----------------Function---------------
-    void HandleTouchInput()
+    private void HandleTouchInput()
     {
-        if (!Application.isMobilePlatform) return;
+        InputAction action = DetectTouchAction();
+        ProcessInputAction(action);
+    }
 
-        if (Input.touchCount == 0) return;
+    private InputAction DetectTouchAction()
+    {
+        if (!Application.isMobilePlatform)
+            return InputAction.None;
+
+        if (waitForTouchRelease)
+        {
+            if (Input.touchCount == 0)
+            {
+                waitForTouchRelease = false;
+            }
+            return InputAction.None;
+        }
+
+        if (Input.touchCount == 0)
+            return InputAction.None;
 
         Touch touch = Input.GetTouch(0);
 
-        switch (touch.phase)
+        if (touch.phase == TouchPhase.Began)
         {
-            case UnityEngine.TouchPhase.Began:
-                isTouching = true;
-                touchStartPos = touch.position;
-                break;
+            isTouching = true;
+            touchStartPos = touch.position;
+            return InputAction.None;
+        }
 
-            case UnityEngine.TouchPhase.Ended:
-                if (!isTouching) return;
+        if (touch.phase != TouchPhase.Ended || !isTouching)
+            return InputAction.None;
 
-                Vector2 delta = touch.position - touchStartPos;
-                isTouching = false;
+        isTouching = false;
 
-                // Small movement = tap → forward
-                if (delta.magnitude < swipeThreshold)
-                {
-                    TryMove(Vector2Int.up);
-                    return;
-                }
+        if (gameState == GameState.Dead)
+        {
+            return InputAction.Restart;
+        }
 
-                // Horizontal swipe
-                if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
-                {
-                    TryMove(delta.x > 0 ? Vector2Int.right : Vector2Int.left);
-                }
-                // Vertical swipe
-                else
-                {
-                    if (delta.y > 0)
-                        TryMove(Vector2Int.up);
-                    else
-                        TryMove(Vector2Int.down);
-                }
+        Vector2 delta = touch.position - touchStartPos;
 
-                break;
+        if (delta.magnitude < swipeThreshold)
+        {
+            return InputAction.MoveUp;
+        }
+
+        if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
+        {
+            return delta.x > 0 ? InputAction.MoveRight : InputAction.MoveLeft;
+        }
+
+        return delta.y > 0 ? InputAction.MoveUp : InputAction.MoveDown;
+    }
+
+    private void ProcessInputAction(InputAction action)
+    {
+        switch (action)
+        {
+            case InputAction.Restart:
+                NewLevel();
+                return;
+            case InputAction.MoveUp:
+                TryMove(Vector2Int.up);
+                return;
+            case InputAction.MoveDown:
+                TryMove(Vector2Int.down);
+                return;
+            case InputAction.MoveLeft:
+                TryMove(Vector2Int.left);
+                return;
+            case InputAction.MoveRight:
+                TryMove(Vector2Int.right);
+                return;
+            default:
+                return;
+        }
+    }
+
+    public void Die(DeathType type)
+    {
+        if (hasDied)
+            return;
+
+        hasDied = true;
+        gameState = GameState.Dead;
+        isMoving = false;
+
+        Vector3 deathPoint = character.position + new Vector3(0, 0.2f, 0.5f);
+        if (type == DeathType.VehicleCollision)
+        {
+            deathPoint = character.position;
+        }
+
+        characterController.PlayDeathFeedback(deathPoint);
+        if (characterModel != null)
+        {
+            characterModel.gameObject.SetActive(false);
+        }
+
+        StartCoroutine(ScreenShake());
+
+        if (scoreLabel != null)
+            scoreLabel.gameObject.SetActive(false);
+        if (scoreText != null)
+            scoreText.gameObject.SetActive(false);
+
+        if (deathUI != null)
+        {
+            finalScore.text = scoreText.text;
+            deathUI.SetActive(true);
         }
     }
 
@@ -376,7 +399,6 @@ public class GameManager : MonoBehaviour
         Camera cam = Camera.main;
         Vector3 camPos = cam.transform.position;
 
-        // Keep current height & depth, reset horizontal framing
         Vector3 camRight = cam.transform.right;
         float playerOffset = Vector3.Dot(character.position, camRight);
 
@@ -384,29 +406,8 @@ public class GameManager : MonoBehaviour
 
         cam.transform.position = camPos;
         cameraBasePos = camPos;
-    }
 
-    public void PlayerCollision()
-    {
-        // Set game state to dead
-        gameState = GameState.Dead;
-        StartCoroutine(ScreenShake());
-        // Disable character model
-        characterModel.gameObject.SetActive(false);
-        inputLockTimer = inputLockDuration;
-
-        // HIDE SCORE UI when player dies
-        if (scoreLabel != null)
-            scoreLabel.gameObject.SetActive(false);
-        if (scoreText != null)
-            scoreText.gameObject.SetActive(false);
-
-        // Update final score display and show death screen
-        if (deathUI != null)
-        {
-            finalScore.text = scoreText.text; // Update final score display
-            deathUI.SetActive(true); // Critical: makes death visible
-        }
+        gameState = GameState.Playing;
     }
 
     private IEnumerator ScreenShake()
