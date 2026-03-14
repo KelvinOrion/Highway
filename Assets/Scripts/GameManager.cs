@@ -1,10 +1,31 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 //using UnityEditor.PackageManager;
 using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
+    [Serializable]
+    private class TrafficTier
+    {
+        [Header("Tier activation")]
+        [SerializeField] public int minRow = 0;
+
+        [Header("Road frequency")]
+        [Range(0f, 1f)]
+        [SerializeField] public float roadProbability = 0.3f;
+
+        [Header("Vehicle pacing")]
+        [SerializeField] public float minSpeed = 1f;
+        [SerializeField] public float maxSpeed = 3f;
+        [SerializeField] public int minVehicleCount = 1;
+        [SerializeField] public int maxVehicleCount = 3;
+        [SerializeField] public float targetReactionTime = 2f;
+        [SerializeField] public float reactionTimeJitter = 0.2f;
+        [SerializeField] public float guaranteedSafeWindow = 1f;
+    }
+
     [Header("Game objects")]
     [SerializeField] private Transform character;
     [SerializeField] private Transform characterModel;
@@ -29,6 +50,51 @@ public class GameManager : MonoBehaviour
     [SerializeField] float forwardFollowStrength = 0.15f;
     [SerializeField] float maxForwardOffset = 3f;
     [SerializeField] Vector3 cameraOffset = new Vector3(3f, 9f, -5f);
+
+    [Header("Traffic tuning")]
+    [SerializeField] private List<TrafficTier> trafficTiers = new()
+    {
+        new TrafficTier
+        {
+            minRow = 0,
+            roadProbability = 0.30f,
+            minSpeed = 1f,
+            maxSpeed = 2.75f,
+            minVehicleCount = 1,
+            maxVehicleCount = 2,
+            targetReactionTime = 2f,
+            reactionTimeJitter = 0.2f,
+            guaranteedSafeWindow = 1.3f
+        },
+        new TrafficTier
+        {
+            minRow = 40,
+            roadProbability = 0.38f,
+            minSpeed = 2f,
+            maxSpeed = 4.75f,
+            minVehicleCount = 1,
+            maxVehicleCount = 3,
+            targetReactionTime = 1f,
+            reactionTimeJitter = 0.15f,
+            guaranteedSafeWindow = 0.95f
+        },
+        new TrafficTier
+        {
+            minRow = 90,
+            roadProbability = 0.5f,
+            minSpeed = 3.25f,
+            maxSpeed = 6f,
+            minVehicleCount = 2,
+            maxVehicleCount = 3,
+            targetReactionTime = 0.8f,
+            reactionTimeJitter = 0.12f,
+            guaranteedSafeWindow = 0.75f
+        }
+    };
+    [SerializeField] private float trafficWrapX = 15f;
+    [SerializeField] private int leftEdgeThreshold = -4;
+    [Range(0f, 0.4f)]
+    [SerializeField] private float leftEdgeDirectionBias = 0.16f;
 
 
     //6 references
@@ -59,8 +125,27 @@ public class GameManager : MonoBehaviour
 
     void Awake()
     {
+        EnsureTrafficTierDefaults();
+        trafficTiers.Sort((a, b) => a.minRow.CompareTo(b.minRow));
         //Initialise all the starting state/
         NewLevel();
+    }
+
+    private void OnValidate()
+    {
+        EnsureTrafficTierDefaults();
+        trafficTiers.Sort((a, b) => a.minRow.CompareTo(b.minRow));
+    }
+
+    private void EnsureTrafficTierDefaults()
+    {
+        if ((trafficTiers == null) || (trafficTiers.Count == 0))
+        {
+            trafficTiers = new List<TrafficTier>
+            {
+                new TrafficTier()
+            };
+        }
     }
 
     void Start()
@@ -131,7 +216,8 @@ public class GameManager : MonoBehaviour
     {
         // Force spawn a road at the current spawnLocation
         Road road = Instantiate(roadPrefab, terrainHolder);
-        obstacles.Add((0.1f, road.Init(spawnLocation), road.gameObject));
+        TrafficTier tier = GetTrafficTier(spawnLocation);
+        obstacles.Add((0.1f, road.Init(spawnLocation, BuildRoadConfig(tier)), road.gameObject));
         road.gameObject.name = $"{spawnLocation} - Road (Forced)";
         
         //Update to the next location
@@ -140,14 +226,14 @@ public class GameManager : MonoBehaviour
 
     private void SpawnObstacles()
     {
-        // Gradually increase road probability as player progresses
-        float roadProbability = Mathf.Lerp(0.3f, 0.5f, spawnLocation / 250f);
+        TrafficTier tier = GetTrafficTier(spawnLocation);
+        float roadProbability = tier.roadProbability;
 
         if (Random.value < roadProbability)
         {
             // Create road with terrain height of 0.1f
             Road road = Instantiate(roadPrefab, terrainHolder);
-            obstacles.Add((0.1f, road.Init(spawnLocation), road.gameObject));
+            obstacles.Add((0.1f, road.Init(spawnLocation, BuildRoadConfig(tier)), road.gameObject));
             road.gameObject.name = $"{spawnLocation} - Road";
         }
         else
@@ -160,6 +246,51 @@ public class GameManager : MonoBehaviour
 
         // Update to the next location
         spawnLocation++;
+    }
+
+    private TrafficTier GetTrafficTier(int row)
+    {
+        TrafficTier selected = trafficTiers[0];
+        foreach (TrafficTier tier in trafficTiers)
+        {
+            if (row >= tier.minRow)
+            {
+                selected = tier;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return selected;
+    }
+
+    private Road.SpawnConfig BuildRoadConfig(TrafficTier tier)
+    {
+        float positiveDirectionChance = 0.5f;
+        if (characterPos.x <= leftEdgeThreshold)
+        {
+            positiveDirectionChance += leftEdgeDirectionBias;
+        }
+
+        int minVehicleCount = Mathf.Max(0, tier.minVehicleCount);
+        int maxVehicleCount = Mathf.Max(minVehicleCount, tier.maxVehicleCount);
+        float minSpeed = Mathf.Max(0.5f, Mathf.Min(tier.minSpeed, tier.maxSpeed));
+        float maxSpeed = Mathf.Max(minSpeed, Mathf.Max(tier.minSpeed, tier.maxSpeed));
+
+        return new Road.SpawnConfig
+        {
+            minSpeed = minSpeed,
+            maxSpeed = maxSpeed,
+            minVehicleCount = minVehicleCount,
+            maxVehicleCount = maxVehicleCount,
+            targetReactionTime = tier.targetReactionTime,
+            reactionTimeJitter = tier.reactionTimeJitter,
+            minGuaranteedSafeWindow = tier.guaranteedSafeWindow,
+            positiveDirectionChance = Mathf.Clamp01(positiveDirectionChance),
+            wrapX = trafficWrapX
+        };
     }
 
     private bool InStartArea(Vector2Int location)

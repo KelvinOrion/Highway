@@ -3,6 +3,19 @@ using UnityEngine;
 
 public class Road : MonoBehaviour
 {
+    public struct SpawnConfig
+    {
+        public float minSpeed;
+        public float maxSpeed;
+        public int minVehicleCount;
+        public int maxVehicleCount;
+        public float targetReactionTime;
+        public float reactionTimeJitter;
+        public float minGuaranteedSafeWindow;
+        public float positiveDirectionChance;
+        public float wrapX;
+    }
+
     [SerializeField] private List<Rigidbody> vehicles;
     
     // Per-vehicle height offsets (default 0.1f for road surface, adjust if asset has different pivot)
@@ -14,24 +27,47 @@ public class Road : MonoBehaviour
     private int direction = 1;
     private float speed = 1f;
     private List<Rigidbody> spawnedVehicles = new();
+    private float wrapX = 15f;
 
-    public HashSet<int> Init(float z)
+    public HashSet<int> Init(float z, SpawnConfig config)
     {
         //Place obstacles at the location provided
         transform.position = new Vector3(0, 0, z);
+        spawnedVehicles.Clear();
 
-        //Choose which direction the vehicles go, -1 or +1.
-        direction = 2 * Random.Range(0, 2) - 1;
+        if ((vehicles == null) || (vehicles.Count == 0))
+        {
+            return new() { -10, 10 };
+        }
 
-        //Choose the speed, we make them faster as we progress
-        float minSpeed = Mathf.Lerp(1f, 3f, z / 500f);
-        float maxSpeed = Mathf.Lerp(3f, 8f, z / 500f);
+        int minCount = Mathf.Max(0, config.minVehicleCount);
+        int maxCount = Mathf.Max(minCount, config.maxVehicleCount);
+        float minSpeed = Mathf.Max(0.5f, Mathf.Min(config.minSpeed, config.maxSpeed));
+        float maxSpeed = Mathf.Max(minSpeed, Mathf.Max(config.minSpeed, config.maxSpeed));
+
+        wrapX = Mathf.Max(6f, config.wrapX);
+
+        //Choose direction with optional weighted edge pressure.
+        direction = Random.value < config.positiveDirectionChance ? 1 : -1;
+
         speed = Random.Range(minSpeed, maxSpeed);
 
-        //choose which vehicles, how many, how far apart they are.
+        //Choose which vehicles and how many to use in this loop.
         int idx = Random.Range(0, vehicles.Count);
-        int vehicleCount = Random.Range(0, 4);
-        float gap = Random.Range(2f, 8f);
+        int vehicleCount = Random.Range(minCount, maxCount + 1);
+
+        //Convert target reaction-time into distance gap so speed and gap stay coupled.
+        float reactionTime = Mathf.Max(
+            0.3f,
+            config.targetReactionTime + Random.Range(-config.reactionTimeJitter, config.reactionTimeJitter)
+        );
+        float laneLength = wrapX * 2f;
+
+        //Keep at least one guaranteed winnable window in every loop.
+        float maxBlockedDistance = laneLength - (speed * config.minGuaranteedSafeWindow);
+        float maxByCount = vehicleCount > 1 ? maxBlockedDistance / (vehicleCount - 1) : laneLength;
+        float baseGap = speed * reactionTime;
+        float gap = Mathf.Clamp(baseGap, 1.5f, Mathf.Max(1.5f, maxByCount));
 
         //Instantiate the vehicles with adjusted rotation and height per asset type
         for (int i = 0; i < vehicleCount; i++)
@@ -69,14 +105,14 @@ public class Road : MonoBehaviour
 
             //Wrap around when they are off camera
             Vector3 pos = vehicle.position;
-            if ((direction > 0) && (pos.x > 15))
+            if ((direction > 0) && (pos.x > wrapX))
             {
-                pos.x = -15;
+                pos.x = -wrapX;
                 vehicle.position = pos;
             }
-            else if ((direction < 0) && (pos.x < -15))
+            else if ((direction < 0) && (pos.x < -wrapX))
             {
-                pos.x = 15;
+                pos.x = wrapX;
                 vehicle.position = pos;
             }
         }
