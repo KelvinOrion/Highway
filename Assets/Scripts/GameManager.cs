@@ -229,7 +229,7 @@ public class GameManager : MonoBehaviour
         TrafficTier tier = GetTrafficTier(spawnLocation);
         float roadProbability = tier.roadProbability;
 
-        if (Random.value < roadProbability)
+        if (UnityEngine.Random.value < roadProbability)
         {
             // Create road with terrain height of 0.1f
             Road road = Instantiate(roadPrefab, terrainHolder);
@@ -546,7 +546,7 @@ public class GameManager : MonoBehaviour
 
         while (elapsed < shakeDuration)
         {
-            Vector3 offset = Random.insideUnitSphere * shakeMagnitude;
+            Vector3 offset = UnityEngine.Random.insideUnitSphere * shakeMagnitude;
             Camera.main.transform.position = cameraBasePos + new Vector3(offset.x, offset.y, 0);
 
             elapsed += Time.unscaledDeltaTime;
