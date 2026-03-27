@@ -3,16 +3,16 @@
   "WorkspaceRootPath": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\onion\\Documents\\GitHub\\Highway\\Library\\PackageCache\\com.unity.render-pipelines.universal@1e87cf1dccb8\\Shaders\\Lit.shader||{3B902123-F8A7-4915-9F01-361F908088D0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Library\\PackageCache\\com.unity.render-pipelines.universal@1e87cf1dccb8\\Shaders\\Lit.shader||{3B902123-F8A7-4915-9F01-361F908088D0}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|C:\\Users\\onion\\Documents\\GitHub\\Highway\\assets\\scripts\\gamemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\gamemanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|C:\\Users\\onion\\Documents\\GitHub\\Highway\\assets\\scripts\\road.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "AbsoluteMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|c:\\users\\onion\\documents\\github\\highway\\assets\\scripts\\road.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\road.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\onion\\Documents\\GitHub\\Highway\\Library\\PackageCache\\com.unity.render-pipelines.universal@1e87cf1dccb8\\Shaders\\Lit.shader||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Library\\PackageCache\\com.unity.render-pipelines.universal@1e87cf1dccb8\\Shaders\\Lit.shader||{3B902123-F8A7-4915-9F01-361F908088D0}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{8C4959FA-C65B-D168-1460-B820018FB93B}|Assembly-CSharp.csproj|C:\\Users\\onion\\Documents\\GitHub\\Highway\\assets\\scripts\\character.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -26,24 +26,25 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 3,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 1,
               "Title": "Road.cs",
               "DocumentMoniker": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Assets\\Scripts\\Road.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\Road.cs",
               "ToolTip": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Assets\\Scripts\\Road.cs",
               "RelativeToolTip": "Assets\\Scripts\\Road.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAABIAAAAAAAAAAAAMwBsAAAAtAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-02-21T12:49:30.575Z",
-              "IsPinned": true
+              "IsPinned": true,
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 2,
               "Title": "Lit.shader",
               "DocumentMoniker": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Library\\PackageCache\\com.unity.render-pipelines.universal@1e87cf1dccb8\\Shaders\\Lit.shader",
               "RelativeDocumentMoniker": "Library\\PackageCache\\com.unity.render-pipelines.universal@1e87cf1dccb8\\Shaders\\Lit.shader",
@@ -51,8 +52,7 @@
               "RelativeToolTip": "Library\\PackageCache\\com.unity.render-pipelines.universal@1e87cf1dccb8\\Shaders\\Lit.shader",
               "ViewState": "AgIAAPABAAAAAAAAAAAqwBYCAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002777|",
-              "WhenOpened": "2026-03-02T12:59:36.324Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-03-02T12:59:36.324Z"
             },
             {
               "$type": "Document",
@@ -68,15 +68,16 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "GameManager.cs",
               "DocumentMoniker": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Assets\\Scripts\\GameManager.cs",
               "RelativeDocumentMoniker": "Assets\\Scripts\\GameManager.cs",
               "ToolTip": "C:\\Users\\onion\\Documents\\GitHub\\Highway\\Assets\\Scripts\\GameManager.cs",
               "RelativeToolTip": "Assets\\Scripts\\GameManager.cs",
-              "ViewState": "AgIAAHIAAAAAAAAAAAAowI8AAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAHMBAAAAAAAAAAAvwJoBAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-01-31T12:20:41.587Z"
+              "WhenOpened": "2026-01-31T12:20:41.587Z",
+              "EditorCaption": ""
             }
           ]
         }

@@ -61,3 +61,6 @@ Debug/
 .cmake/
 .externalNativeBuild/
 build/
+/.vs/Highway/copilot-chat
+/.vs/Highway/CopilotIndices
+/.vs/Highway/CopilotIndices
