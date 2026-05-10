@@ -28,9 +28,9 @@ public sealed class DeathScreen : MonoBehaviour
 
     [Header("Layout")]
     [SerializeField] private RectTransform newspaperPanel;
-    [SerializeField] private float mobileScaleFactor = 0.92f;
-    [SerializeField] private float desktopScaleFactor = 0.65f;
-    [SerializeField] private float mobileWidthThreshold = 600f;
+    [SerializeField, Range(0.5f, 1f)] private float webTextScale = 0.75f;
+    [SerializeField, Range(0.55f, 1f)] private float webLayoutScale = 0.66f;
+    [SerializeField, Range(1f, 1.8f)] private float webWidthScale = 1.4f;
 
     private const string RunCountKey = "DeathScreen.RunCount";
     private const float FullyVisibleAlpha = 0.99f;
@@ -39,6 +39,31 @@ public sealed class DeathScreen : MonoBehaviour
     private bool activatingForShow;
     private bool retryRequested;
     private int lastShareFrame = -1;
+    private TMP_Text[] newspaperTexts;
+    private float[] originalFontSizes;
+    private float[] originalFontSizeMins;
+    private float[] originalFontSizeMaxes;
+    private LayoutElement[] newspaperLayoutElements;
+    private LayoutElementSize[] originalLayoutElementSizes;
+    private HorizontalOrVerticalLayoutGroup[] newspaperLayoutGroups;
+    private LayoutGroupMetrics[] originalLayoutGroupMetrics;
+    private RectTransform[] newspaperLayoutRects;
+    private Vector2[] originalLayoutRectSizeDeltas;
+
+    private struct LayoutElementSize
+    {
+        public float MinHeight;
+        public float PreferredHeight;
+    }
+
+    private struct LayoutGroupMetrics
+    {
+        public int PaddingLeft;
+        public int PaddingRight;
+        public int PaddingTop;
+        public int PaddingBottom;
+        public float Spacing;
+    }
 
     private void Awake()
     {
@@ -183,49 +208,249 @@ public sealed class DeathScreen : MonoBehaviour
     {
         if (newspaperPanel == null)
         {
-            newspaperPanel = transform as RectTransform;
+            Debug.LogWarning("[DeathScreen] newspaperPanel is null - drag Newspaper into the slot in Inspector.");
+            return;
+        }
+
+        Canvas canvas = GetComponentInParent<Canvas>();
+        if (canvas == null)
+        {
+            Debug.LogWarning("[DeathScreen] No parent Canvas found.");
+            return;
+        }
+
+        RectTransform canvasRect = canvas.GetComponent<RectTransform>();
+        float canvasWidth = canvasRect.rect.width;
+        float canvasHeight = canvasRect.rect.height;
+
+        float horizontalPadding = 0.88f;
+        float verticalPadding = 0.92f;
+
+        float maxWidth = canvasWidth * horizontalPadding;
+        float maxHeight = canvasHeight * verticalPadding;
+
+        float originalWidth = 880f;
+        float originalHeight = 1560f;
+
+        bool useWebLayout = ShouldUseWebNewspaperLayout(canvasWidth, canvasHeight);
+        if (useWebLayout)
+        {
+            originalWidth *= webWidthScale;
+        }
+
+        float aspectRatio = originalHeight / originalWidth;
+
+        float targetWidth = maxWidth;
+        float targetHeight = targetWidth * aspectRatio;
+
+        if (targetHeight > maxHeight)
+        {
+            targetHeight = maxHeight;
+            targetWidth = targetHeight / aspectRatio;
+        }
+
+        newspaperPanel.sizeDelta = new Vector2(targetWidth, targetHeight);
+        ApplyNewspaperLayoutScale(useWebLayout);
+        ApplyNewspaperTextScale(useWebLayout);
+        LayoutRebuilder.ForceRebuildLayoutImmediate(newspaperPanel);
+    }
+
+    private static bool ShouldUseWebNewspaperLayout(float canvasWidth, float canvasHeight)
+    {
+        return Application.platform == RuntimePlatform.WebGLPlayer || canvasWidth > canvasHeight;
+    }
+
+    private void ApplyNewspaperTextScale(bool useWebLayout)
+    {
+        if (!TryCacheNewspaperTextSizes())
+        {
+            return;
+        }
+
+        float textScale = useWebLayout ? webTextScale : 1f;
+
+        for (int index = 0; index < newspaperTexts.Length; index++)
+        {
+            TMP_Text text = newspaperTexts[index];
+            if (text == null)
+            {
+                continue;
+            }
+
+            text.fontSize = originalFontSizes[index] * textScale;
+            text.fontSizeMin = originalFontSizeMins[index] * textScale;
+            text.fontSizeMax = originalFontSizeMaxes[index] * textScale;
+        }
+    }
+
+    private bool TryCacheNewspaperTextSizes()
+    {
+        if (newspaperTexts != null)
+        {
+            return true;
         }
 
         if (newspaperPanel == null)
         {
-            return;
+            return false;
         }
 
-        float screenWidth = Screen.width;
-        float scaleFactor = screenWidth < mobileWidthThreshold
-            ? mobileScaleFactor
-            : desktopScaleFactor;
+        newspaperTexts = newspaperPanel.GetComponentsInChildren<TMP_Text>(true);
+        originalFontSizes = new float[newspaperTexts.Length];
+        originalFontSizeMins = new float[newspaperTexts.Length];
+        originalFontSizeMaxes = new float[newspaperTexts.Length];
 
-        Canvas parentCanvas = GetComponentInParent<Canvas>();
-        if (parentCanvas == null)
+        for (int index = 0; index < newspaperTexts.Length; index++)
+        {
+            TMP_Text text = newspaperTexts[index];
+            if (text == null)
+            {
+                continue;
+            }
+
+            originalFontSizes[index] = text.fontSize;
+            originalFontSizeMins[index] = text.fontSizeMin;
+            originalFontSizeMaxes[index] = text.fontSizeMax;
+        }
+
+        return true;
+    }
+
+    private void ApplyNewspaperLayoutScale(bool useWebLayout)
+    {
+        if (!TryCacheNewspaperLayoutSizes())
         {
             return;
         }
 
-        RectTransform canvasRect = parentCanvas.GetComponent<RectTransform>();
-        if (canvasRect == null)
+        float layoutScale = useWebLayout ? webLayoutScale : 1f;
+
+        for (int index = 0; index < newspaperLayoutElements.Length; index++)
         {
-            return;
+            LayoutElement layoutElement = newspaperLayoutElements[index];
+            if (layoutElement == null)
+            {
+                continue;
+            }
+
+            LayoutElementSize originalSize = originalLayoutElementSizes[index];
+            layoutElement.minHeight = ScalePositive(originalSize.MinHeight, layoutScale);
+            layoutElement.preferredHeight = ScalePositive(originalSize.PreferredHeight, layoutScale);
         }
 
-        float currentWidth = newspaperPanel.rect.width;
-        float currentHeight = newspaperPanel.rect.height;
-        if (currentWidth <= 0f || currentHeight <= 0f)
+        for (int index = 0; index < newspaperLayoutRects.Length; index++)
         {
-            currentWidth = newspaperPanel.sizeDelta.x;
-            currentHeight = newspaperPanel.sizeDelta.y;
+            RectTransform rectTransform = newspaperLayoutRects[index];
+            if (rectTransform == null)
+            {
+                continue;
+            }
+
+            Vector2 originalSizeDelta = originalLayoutRectSizeDeltas[index];
+            rectTransform.sizeDelta = new Vector2(
+                originalSizeDelta.x,
+                ScalePositive(originalSizeDelta.y, layoutScale));
         }
 
-        if (currentWidth <= 0f || currentHeight <= 0f)
+        for (int index = 0; index < newspaperLayoutGroups.Length; index++)
         {
-            return;
+            HorizontalOrVerticalLayoutGroup layoutGroup = newspaperLayoutGroups[index];
+            if (layoutGroup == null)
+            {
+                continue;
+            }
+
+            LayoutGroupMetrics originalMetrics = originalLayoutGroupMetrics[index];
+            layoutGroup.padding = new RectOffset(
+                ScalePositive(originalMetrics.PaddingLeft, layoutScale),
+                ScalePositive(originalMetrics.PaddingRight, layoutScale),
+                ScalePositive(originalMetrics.PaddingTop, layoutScale),
+                ScalePositive(originalMetrics.PaddingBottom, layoutScale));
+            layoutGroup.spacing = ScalePositive(originalMetrics.Spacing, layoutScale);
+        }
+    }
+
+    private bool TryCacheNewspaperLayoutSizes()
+    {
+        if (newspaperLayoutElements != null && newspaperLayoutGroups != null && newspaperLayoutRects != null)
+        {
+            return true;
         }
 
-        float targetWidth = canvasRect.rect.width * scaleFactor;
-        float ratio = currentHeight / currentWidth;
-        float targetHeight = targetWidth * ratio;
+        if (newspaperPanel == null)
+        {
+            return false;
+        }
 
-        newspaperPanel.sizeDelta = new Vector2(targetWidth, targetHeight);
+        newspaperLayoutElements = newspaperPanel.GetComponentsInChildren<LayoutElement>(true);
+        originalLayoutElementSizes = new LayoutElementSize[newspaperLayoutElements.Length];
+
+        for (int index = 0; index < newspaperLayoutElements.Length; index++)
+        {
+            LayoutElement layoutElement = newspaperLayoutElements[index];
+            if (layoutElement == null)
+            {
+                continue;
+            }
+
+            originalLayoutElementSizes[index] = new LayoutElementSize
+            {
+                MinHeight = layoutElement.minHeight,
+                PreferredHeight = layoutElement.preferredHeight
+            };
+        }
+
+        RectTransform[] allRectTransforms = newspaperPanel.GetComponentsInChildren<RectTransform>(true);
+        newspaperLayoutRects = new RectTransform[Mathf.Max(0, allRectTransforms.Length - 1)];
+        originalLayoutRectSizeDeltas = new Vector2[newspaperLayoutRects.Length];
+
+        int layoutRectIndex = 0;
+        for (int index = 0; index < allRectTransforms.Length; index++)
+        {
+            RectTransform rectTransform = allRectTransforms[index];
+            if (rectTransform == null || rectTransform == newspaperPanel)
+            {
+                continue;
+            }
+
+            newspaperLayoutRects[layoutRectIndex] = rectTransform;
+            originalLayoutRectSizeDeltas[layoutRectIndex] = rectTransform.sizeDelta;
+            layoutRectIndex++;
+        }
+
+        newspaperLayoutGroups = newspaperPanel.GetComponentsInChildren<HorizontalOrVerticalLayoutGroup>(true);
+        originalLayoutGroupMetrics = new LayoutGroupMetrics[newspaperLayoutGroups.Length];
+
+        for (int index = 0; index < newspaperLayoutGroups.Length; index++)
+        {
+            HorizontalOrVerticalLayoutGroup layoutGroup = newspaperLayoutGroups[index];
+            if (layoutGroup == null)
+            {
+                continue;
+            }
+
+            RectOffset padding = layoutGroup.padding;
+            originalLayoutGroupMetrics[index] = new LayoutGroupMetrics
+            {
+                PaddingLeft = padding.left,
+                PaddingRight = padding.right,
+                PaddingTop = padding.top,
+                PaddingBottom = padding.bottom,
+                Spacing = layoutGroup.spacing
+            };
+        }
+
+        return true;
+    }
+
+    private static float ScalePositive(float value, float scale)
+    {
+        return value > 0f ? value * scale : value;
+    }
+
+    private static int ScalePositive(int value, float scale)
+    {
+        return value > 0 ? Mathf.RoundToInt(value * scale) : value;
     }
 
     private static void SetText(TMP_Text target, string value)
