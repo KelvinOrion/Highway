@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 87de0552fccc496cbc0dd3ebd1f42dbd
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - mastheadFont: {fileID: 11400000, guid: 9b87720f29d2a8c40a6358e6de6f2f91, type: 2}
+  - headlineFont: {fileID: 11400000, guid: 6eb55cec87fafe34889e78f504e9ceaf, type: 2}
+  - headlineItalicFont: {fileID: 11400000, guid: 2b8dc36bd6674214aad905df8d7be005, type: 2}
+  - bodyFont: {fileID: 11400000, guid: f21e313e307f2754591ed6334d6e234a, type: 2}
+  - bodyItalicFont: {fileID: 11400000, guid: dbc09f709cbedd547a96e300496a8b32, type: 2}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData:
+  assetBundleName:
+  assetBundleVariant:

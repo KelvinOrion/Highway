@@ -1,427 +1,624 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
-//using UnityEditor.PackageManager;
 using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
+    private const int TargetFrameRate = 60;
+    private const int StartX = 0;
+    private const int StartY = -3;
+    private const int StartAreaMinX = -10;
+    private const int StartAreaMaxX = 10;
+    private const int StartAreaMinY = -5;
+    private const int StartAreaMaxY = 0;
+    private const int MaxStepsBehindScore = 10;
+    private const float RoadHeight = 0.1f;
+    private const float GrassHeight = 0.2f;
+    private const float DefaultHopAnimationDuration = 0.3f;
+    private const float MinMoveDuration = 0.01f;
+    private const float MinRoadProbability = 0.3f;
+    private const float MaxRoadProbability = 0.5f;
+    private const float RoadProbabilityMaxDistance = 250f;
+    private const float RiverDeathHeightOffset = 0.2f;
+    private const float RiverDeathForwardOffset = 0.5f;
+    private const int FallbackDeathDataVariantCount = 5;
+
     [Header("Game objects")]
     [SerializeField] private Transform character;
     [SerializeField] private Transform characterModel;
     [SerializeField] private Transform terrainHolder;
     [SerializeField] private TMPro.TextMeshProUGUI scoreLabel;
     [SerializeField] private TMPro.TextMeshProUGUI scoreText;
-    [SerializeField] private TMPro.TextMeshProUGUI finalScore;
+    [SerializeField] private DeathScreen deathScreen;
 
     [Header("Terrain objects")]
     [SerializeField] private Grass grassPrefab;
     [SerializeField] private Road roadPrefab;
+
+    [Header("Death screen")]
+    [SerializeField] private DeathData[] deathPresets;
+    [SerializeField] private float deathScreenDelay = 0.9f;
 
     [Header("Game parameters")]
     [SerializeField] private float moveDuration = 0.1f;
     [SerializeField] private int spawnDistance = 25;
     [SerializeField] private float shakeDuration = 0.15f;
     [SerializeField] private float shakeMagnitude = 0.15f;
-    [SerializeField] float deadZoneLeft = -0.5f;
-    [SerializeField] float deadZoneRight = 0.5f;
-    [SerializeField] float minCamOffset = -3f;
-    [SerializeField] float maxCamOffset = 6f;
-    [SerializeField] float forwardFollowStrength = 0.15f;
-    [SerializeField] float maxForwardOffset = 3f;
-    [SerializeField] Vector3 cameraOffset = new Vector3(3f, 9f, -5f);
+    [SerializeField] private Vector3 cameraOffset = new(3f, 9f, -5f);
 
-
-    //6 references
-    enum GameState
+    private enum GameState
     {
         Ready,
         Moving,
         Dead
     }
+
+    private readonly struct TerrainRow
+    {
+        public TerrainRow(float height, HashSet<int> blockedColumns, GameObject instance)
+        {
+            Height = height;
+            BlockedColumns = blockedColumns;
+            Instance = instance;
+        }
+
+        public float Height { get; }
+        public HashSet<int> BlockedColumns { get; }
+        public GameObject Instance { get; }
+    }
+
+    private readonly List<TerrainRow> terrainRows = new();
+    private readonly WaitForFixedUpdate waitForFixedUpdate = new();
+    private Character characterController;
+    private Rigidbody characterBody;
+    private Animator characterAnimator;
+    private float hopAnimationDuration = DefaultHopAnimationDuration;
     private GameState gameState;
     private Vector2Int characterPos;
+    private int score;
+    private int coinsCollected;
     private int spawnLocation;
-    private List<(float terrainHeight, HashSet<int> locations, GameObject obj)> obstacles = new();
-    private int score = 0;
+    private float fixedCameraY;
     private Vector3 cameraBasePos;
-    Vector2 touchStartPos;
-    bool isTouching;
-    float swipeThreshold = 60f; // tune the swipe threshold
-    float inputLockTimer = 1f;
-    float inputLockDuration = 0.8f; // 200ms feels right on mobile
-    float currentForwardOffset = 0f;
-    float fixedCameraY;
-    public GameObject deathUI;
-    //remove hold-based movement
-    //bool isHoldingForward = false;
-    //float forwardHoldTimer = 0f;
-    //float forwardStepInterval = 0.18f; // default speed
+    private Coroutine deathSequenceRoutine;
 
-    void Awake()
+    private void Awake()
     {
-        //Initialise all the starting state/
+        Application.targetFrameRate = TargetFrameRate;
+        QualitySettings.vSyncCount = 0;
+
+        if (character != null)
+        {
+            characterController = character.GetComponent<Character>();
+            characterBody = character.GetComponent<Rigidbody>();
+            ConfigureCharacterBody();
+            fixedCameraY = character.position.y + cameraOffset.y;
+        }
+
         NewLevel();
     }
 
-    void Start()
+    private void Start()
     {
-        Application.targetFrameRate = 60;
-        QualitySettings.vSyncCount = 0;
-
-        Camera cam = Camera.main;
-
-        // Intention-based camera setup
-        fixedCameraY = character.position.y + cameraOffset.y;
+        characterAnimator = character != null ? character.GetComponentInChildren<Animator>() : null;
+        CacheHopAnimationDuration();
     }
 
+    private void OnValidate()
+    {
+        moveDuration = Mathf.Max(MinMoveDuration, moveDuration);
+        spawnDistance = Mathf.Max(1, spawnDistance);
+        shakeDuration = Mathf.Max(0f, shakeDuration);
+        shakeMagnitude = Mathf.Abs(shakeMagnitude);
+        deathScreenDelay = Mathf.Max(0f, deathScreenDelay);
+    }
+
+    // Resets runtime state and rebuilds the starting terrain rows.
     private void NewLevel()
     {
+        if (deathSequenceRoutine != null)
+        {
+            StopCoroutine(deathSequenceRoutine);
+            deathSequenceRoutine = null;
+        }
+
         gameState = GameState.Ready;
-        
-        // HIDE DEATH SCREEN(prevents persistent display)
-        if (deathUI != null)
-            deathUI.SetActive(false); // Critical: cleans UI state
 
-        // SHOW SCORE UI when new level starts
-        if (scoreLabel != null)
-            scoreLabel.gameObject.SetActive(true);
-        if (scoreText != null)
-            scoreText.gameObject.SetActive(true);
+        HideDeathScreenImmediate();
+        SetScoreUiVisible(true);
+        ResetCharacter();
+        ResetScore();
+        ClearTerrain();
+        SpawnInitialTerrain();
+        ResetCameraToPlayer();
+    }
 
-        // Reset character position every new round
-        // Keep characterPos and character.position in sync: both should represent the same logical position
-        characterPos = new Vector2Int(0, -3);
-        character.position = new Vector3(0, 0.2f, -3);
-        character.GetComponent<Character>().Reset();
+    private void ResetCharacter()
+    {
+        if (character == null)
+        {
+            Debug.LogError($"{nameof(GameManager)} is missing its character reference.", this);
+            return;
+        }
+
+        characterPos = new Vector2Int(StartX, StartY);
+        SetCharacterPosition(new Vector3(StartX, GrassHeight, StartY));
+        characterController?.Reset();
+
         if (characterModel != null)
         {
             characterModel.gameObject.SetActive(true);
         }
+    }
 
-        // Reset score 
+    private void ResetScore()
+    {
         score = 0;
-        scoreText.text = "0";
-        //Remove all terrain
-        obstacles.Clear();
+        coinsCollected = 0;
+        UpdateScoreText();
+    }
+
+    private void ClearTerrain()
+    {
+        terrainRows.Clear();
+
+        if (terrainHolder == null)
+        {
+            Debug.LogError($"{nameof(GameManager)} is missing its terrain holder reference.", this);
+            return;
+        }
+
         foreach (Transform child in terrainHolder)
         {
             Destroy(child.gameObject);
         }
+    }
 
-        // Spawn terrain ahead of the character
-        // First tile (spawnLocation = 0) is always a road to ensure smooth gameplay transition
+    private void SpawnInitialTerrain()
+    {
         spawnLocation = 0;
-        SpawnRoad(); // Force first tile to be a road with proper car mechanics
-        
-        // Spawn remaining tiles with random terrain
-        for (int i = 1; i < spawnDistance; i++)
+        if (!SpawnRoad("Road (Start)"))
         {
-            SpawnObstacles();
+            return;
         }
 
-        //Reset camera after player respawn
-        ResetCameraToPlayer();
-        currentForwardOffset = 0f;
-
-        // Lock input after restarting to prevent double-tap forward bug
-        //inputLockTimer = restartInputLockDuration;
+        for (int i = 1; i < spawnDistance; i++)
+        {
+            if (!SpawnTerrainRow())
+            {
+                return;
+            }
+        }
     }
 
-    private void SpawnRoad()
+    private bool SpawnRoad(string label = "Road")
     {
-        // Force spawn a road at the current spawnLocation
+        if (roadPrefab == null || terrainHolder == null)
+        {
+            Debug.LogError($"{nameof(GameManager)} cannot spawn roads until Road Prefab and Terrain Holder are assigned.", this);
+            return false;
+        }
+
         Road road = Instantiate(roadPrefab, terrainHolder);
-        obstacles.Add((0.1f, road.Init(spawnLocation), road.gameObject));
-        road.gameObject.name = $"{spawnLocation} - Road (Forced)";
-        
-        //Update to the next location
+        terrainRows.Add(new TerrainRow(RoadHeight, road.Init(spawnLocation), road.gameObject));
+        road.gameObject.name = $"{spawnLocation} - {label}";
         spawnLocation++;
+        return true;
     }
 
-    private void SpawnObstacles()
+    private bool SpawnTerrainRow()
     {
-        // Gradually increase road probability as player progresses
-        float roadProbability = Mathf.Lerp(0.3f, 0.5f, spawnLocation / 250f);
+        float roadProbability = Mathf.Lerp(MinRoadProbability, MaxRoadProbability, spawnLocation / RoadProbabilityMaxDistance);
 
         if (Random.value < roadProbability)
         {
-            // Create road with terrain height of 0.1f
-            Road road = Instantiate(roadPrefab, terrainHolder);
-            obstacles.Add((0.1f, road.Init(spawnLocation), road.gameObject));
-            road.gameObject.name = $"{spawnLocation} - Road";
-        }
-        else
-        {
-            // Create grass with terrain height of 0.2f
-            Grass grass = Instantiate(grassPrefab, terrainHolder);
-            obstacles.Add((0.2f, grass.Init(spawnLocation), grass.gameObject));
-            grass.gameObject.name = $"{spawnLocation} - Grass";
+            return SpawnRoad();
         }
 
-        // Update to the next location
+        if (grassPrefab == null || terrainHolder == null)
+        {
+            Debug.LogError($"{nameof(GameManager)} cannot spawn grass until Grass Prefab and Terrain Holder are assigned.", this);
+            return false;
+        }
+
+        Grass grass = Instantiate(grassPrefab, terrainHolder);
+        terrainRows.Add(new TerrainRow(GrassHeight, grass.Init(spawnLocation), grass.gameObject));
+        grass.gameObject.name = $"{spawnLocation} - Grass";
         spawnLocation++;
+        return true;
     }
 
-    private bool InStartArea(Vector2Int location)
+    private static bool InStartArea(Vector2Int location)
     {
-        //Movement anywhere in the starting region is aligned.
-        if ((location.y > -5) && (location.y < 0) && (location.x > -10) && (location.x < 10)) { return true; }
-        return false;
+        return location.y > StartAreaMinY &&
+               location.y < StartAreaMaxY &&
+               location.x > StartAreaMinX &&
+               location.x < StartAreaMaxX;
     }
 
     private IEnumerator MoveCharacter()
     {
         gameState = GameState.Moving;
+
         float elapsedTime = 0f;
-
-        //The yHeight changes if we're on grass or road
-        float yHeight = 0.2f;
-        if (characterPos.y >= 0 && characterPos.y < obstacles.Count)
-        {
-            yHeight = obstacles[characterPos.y].terrainHeight;
-        }
-
-        Vector3 startPos = character.position;
+        float yHeight = GetTerrainHeight(characterPos);
+        Vector3 startPos = characterBody != null ? characterBody.position : character.position;
         Vector3 endPos = new(characterPos.x, yHeight, characterPos.y);
 
         while (elapsedTime < moveDuration)
         {
-            //How far through the animation are we
-            float percent = elapsedTime / moveDuration;
+            float percent = moveDuration <= 0f ? 1f : elapsedTime / moveDuration;
+            SetCharacterPosition(Vector3.Lerp(startPos, endPos, percent));
 
-            //Update character position
-            Vector3 newPos = Vector3.Lerp(startPos, endPos, percent);
-
-            //Make character jump in an arc
-            float arcHeight = 0.5f * Mathf.Sin(Mathf.PI * percent);
-            newPos.y = yHeight + arcHeight;
-            character.position = newPos;
-
-            //Update elapsed time
-            elapsedTime += Time.deltaTime;
-
-            yield return null;
+            elapsedTime += Time.fixedDeltaTime;
+            yield return waitForFixedUpdate;
         }
 
-        //Ensure we're at the end
-        character.position = endPos;
+        SetCharacterPosition(endPos);
 
-        //Need to check we're still in moving at the end.
-        //If we're dead we don't want to go back to ready.
         if (gameState == GameState.Moving)
         {
             gameState = GameState.Ready;
         }
+
+        ResetHopAnimationSpeed();
     }
 
-    // function to move character, and build for independent from platform
+    private float GetTerrainHeight(Vector2Int position)
+    {
+        return position.y >= 0 && position.y < terrainRows.Count
+            ? terrainRows[position.y].Height
+            : GrassHeight;
+    }
+
     private void TryMove(Vector2Int direction)
     {
-        // Ignore empty intent
-        if (direction == Vector2Int.zero) return;
-
-        // Only move when ready
-        if (gameState != GameState.Ready) return;
+        if (direction == Vector2Int.zero || gameState != GameState.Ready || character == null)
+        {
+            return;
+        }
 
         Vector2Int destination = characterPos + direction;
-
-        // move area
-        if (InStartArea(destination) || ((destination.y >= 0) && (destination.y < obstacles.Count) && !obstacles[destination.y].locations.Contains(destination.x)))
+        if (!CanMoveTo(destination))
         {
-            {
-                characterPos = destination;
-                StartCoroutine(MoveCharacter());
-                //Move camera forwards
-                if (direction == Vector2Int.up)
-                {
-                    currentForwardOffset = Mathf.Min(
-                        currentForwardOffset + forwardFollowStrength,
-                        maxForwardOffset
-                    );
-                }
-
-                // Update score if we moved forward
-                if ((destination.y + 1) > score)
-                {
-                    score = destination.y + 1;
-                    scoreText.text = $"{score}";
-                }
-            }
-
-            // Spawn new obstacles if necessary
-            while (obstacles.Count < (characterPos.y + spawnDistance))
-            {
-                SpawnObstacles();
-
-                // Destroy old obstacles to save memory
-                int oldIndex = characterPos.y - spawnDistance;
-                if ((oldIndex >= 0) && (oldIndex < obstacles.Count) && (obstacles[oldIndex].obj != null))
-                {
-                    Destroy(obstacles[oldIndex].obj);
-                }
-            }
-
-            // If character gone too far back, end game
-            if (characterPos.y < (score - 10))
-            {
-                character.GetComponent<Character>().Kill(character.position + new Vector3(0, 0.2f, 0.5f));
-            }
-        }
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        //if (inputLockTimer > 0f)
-        //{
-        //    inputLockTimer -= Time.deltaTime;
-        //    return; // Ignore all input
-        //}
-
-        HandleTouchInput();
-
-        // (Mobile) Can only use shortcut to restart when dead
-        if (gameState == GameState.Dead && Input.touchCount > 0)
-        {
-            NewLevel();
-        }
-    }
-
-    void LateUpdate()
-    {
-        if (gameState == GameState.Dead)
             return;
+        }
+
+        characterPos = destination;
+        characterController?.FaceDirection(direction);
+        if (characterController == null)
+        {
+            character.localRotation = Quaternion.Euler(0f, DirectionToYaw(direction), 0f);
+        }
+
+        PlayHopAnimation();
+        StartCoroutine(MoveCharacter());
+
+        if (destination.y + 1 > score)
+        {
+            score = destination.y + 1;
+            UpdateScoreText();
+        }
+
+        EnsureTerrainAhead();
+
+        if (characterPos.y < score - MaxStepsBehindScore)
+        {
+            characterController?.Kill(character.position + new Vector3(0f, RiverDeathHeightOffset, RiverDeathForwardOffset));
+        }
+    }
+
+    private bool CanMoveTo(Vector2Int destination)
+    {
+        if (InStartArea(destination))
+        {
+            return true;
+        }
+
+        return destination.y >= 0 &&
+               destination.y < terrainRows.Count &&
+               !terrainRows[destination.y].BlockedColumns.Contains(destination.x);
+    }
+
+    private void EnsureTerrainAhead()
+    {
+        while (terrainRows.Count < characterPos.y + spawnDistance)
+        {
+            if (!SpawnTerrainRow())
+            {
+                return;
+            }
+
+            int oldIndex = characterPos.y - spawnDistance;
+            if (oldIndex >= 0 && oldIndex < terrainRows.Count && terrainRows[oldIndex].Instance != null)
+            {
+                Destroy(terrainRows[oldIndex].Instance);
+            }
+        }
+    }
+
+    private void LateUpdate()
+    {
+        if (character == null)
+        {
+            return;
+        }
+
+        SyncCharacterTransformToBody();
+
+        if (gameState == GameState.Dead)
+        {
+            return;
+        }
 
         Camera cam = Camera.main;
+        if (cam == null)
+        {
+            return;
+        }
 
-        Vector3 camRight = cam.transform.right;
-        Vector3 camForward = cam.transform.forward;
-        Vector3 camUp = cam.transform.up;
-
-        Vector3 targetPos = character.position + cameraOffset;
-        targetPos.y = fixedCameraY;
-
-        float characterRight = Vector3.Dot(character.position, camRight);
-        float cameraRight = Vector3.Dot(cameraBasePos, camRight);
-
-        // Only move the camera when the character crosses the dead-zone.
-        float deltaRight = characterRight - cameraRight;
-        if (deltaRight < deadZoneLeft)
-            cameraRight = characterRight - deadZoneLeft;
-        else if (deltaRight > deadZoneRight)
-            cameraRight = characterRight - deadZoneRight;
-
-        cameraRight = Mathf.Clamp(cameraRight, characterRight + minCamOffset, characterRight + maxCamOffset);
-
-        targetPos =
-            camRight * cameraRight +
-            camForward * Vector3.Dot(targetPos, camForward) +
-            camUp * Vector3.Dot(targetPos, camUp);
-
-        targetPos.z = character.position.z + cameraOffset.z;
-
+        Vector3 targetPos = GetCameraTargetPosition(character.position);
         cam.transform.position = targetPos;
         cameraBasePos = targetPos;
     }
 
-    //----------------Function---------------
-    void HandleTouchInput()
+    // Called by InputRouter. Replaces all legacy Input polling.
+    public void HandleMove(Vector2Int direction)
     {
-        if (!Application.isMobilePlatform) return;
-
-        if (Input.touchCount == 0) return;
-
-        Touch touch = Input.GetTouch(0);
-
-        switch (touch.phase)
-        {
-            case UnityEngine.TouchPhase.Began:
-                isTouching = true;
-                touchStartPos = touch.position;
-                break;
-
-            case UnityEngine.TouchPhase.Ended:
-                if (!isTouching) return;
-
-                Vector2 delta = touch.position - touchStartPos;
-                isTouching = false;
-
-                // Small movement = tap → forward
-                if (delta.magnitude < swipeThreshold)
-                {
-                    TryMove(Vector2Int.up);
-                    return;
-                }
-
-                // Horizontal swipe
-                if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
-                {
-                    TryMove(delta.x > 0 ? Vector2Int.right : Vector2Int.left);
-                }
-                // Vertical swipe
-                else
-                {
-                    if (delta.y > 0)
-                        TryMove(Vector2Int.up);
-                    else
-                        TryMove(Vector2Int.down);
-                }
-
-                break;
-        }
+        TryMove(direction);
     }
 
-    void ResetCameraToPlayer()
+    private static float DirectionToYaw(Vector2Int direction)
+    {
+        if (direction == Vector2Int.right) return 90f;
+        if (direction == Vector2Int.down) return 180f;
+        if (direction == Vector2Int.left) return -90f;
+
+        return 0f;
+    }
+
+    private void ResetCameraToPlayer()
     {
         Camera cam = Camera.main;
-        Vector3 camPos = cam.transform.position;
+        if (cam == null || character == null)
+        {
+            return;
+        }
 
-        // Keep current height & depth, reset horizontal framing
-        Vector3 camRight = cam.transform.right;
-        float playerOffset = Vector3.Dot(character.position, camRight);
-
-        camPos += camRight * (playerOffset - Vector3.Dot(camPos, camRight));
-
+        fixedCameraY = character.position.y + cameraOffset.y;
+        Vector3 camPos = GetCameraTargetPosition(character.position);
         cam.transform.position = camPos;
         cameraBasePos = camPos;
     }
 
+    private Vector3 GetCameraTargetPosition(Vector3 followPosition)
+    {
+        return new Vector3(
+            followPosition.x + cameraOffset.x,
+            fixedCameraY,
+            followPosition.z + cameraOffset.z);
+    }
+
     public void PlayerCollision()
     {
-        // Set game state to dead
-        gameState = GameState.Dead;
-        StartCoroutine(ScreenShake());
-        // Disable character model
-        characterModel.gameObject.SetActive(false);
-        inputLockTimer = inputLockDuration;
-
-        // HIDE SCORE UI when player dies
-        if (scoreLabel != null)
-            scoreLabel.gameObject.SetActive(false);
-        if (scoreText != null)
-            scoreText.gameObject.SetActive(false);
-
-        // Update final score display and show death screen
-        if (deathUI != null)
+        if (gameState == GameState.Dead)
         {
-            finalScore.text = scoreText.text; // Update final score display
-            deathUI.SetActive(true); // Critical: makes death visible
+            return;
         }
+
+        gameState = GameState.Dead;
+
+        if (deathSequenceRoutine != null)
+        {
+            StopCoroutine(deathSequenceRoutine);
+        }
+
+        deathSequenceRoutine = StartCoroutine(PlayerDeathSequence());
+    }
+
+    private IEnumerator PlayerDeathSequence()
+    {
+        StartCoroutine(ScreenShake());
+
+        SetScoreUiVisible(false);
+
+        if (deathScreenDelay > 0f)
+        {
+            yield return new WaitForSecondsRealtime(deathScreenDelay);
+        }
+
+        OnPlayerDeath(ChooseDeathData());
+        deathSequenceRoutine = null;
+    }
+
+    public void AddCoin()
+    {
+        coinsCollected++;
+    }
+
+    public void AddCoins(int amount = 1)
+    {
+        coinsCollected = Mathf.Max(0, coinsCollected + amount);
+    }
+
+    public void OnPlayerDeath(DeathData data)
+    {
+        Time.timeScale = 0f;
+
+        DeathScreen screen = ResolveDeathScreen();
+        if (screen == null)
+        {
+            Debug.LogWarning($"{nameof(GameManager)} cannot show the death screen because no {nameof(DeathScreen)} is assigned or present in the scene.", this);
+            return;
+        }
+
+        screen.Show(data != null ? data : ChooseDeathData(), score, coinsCollected);
     }
 
     private IEnumerator ScreenShake()
     {
+        Camera cam = Camera.main;
+        if (cam == null)
+        {
+            yield break;
+        }
+
         float elapsed = 0f;
 
         while (elapsed < shakeDuration)
         {
             Vector3 offset = Random.insideUnitSphere * shakeMagnitude;
-            Camera.main.transform.position = cameraBasePos + new Vector3(offset.x, offset.y, 0);
+            cam.transform.position = cameraBasePos + new Vector3(offset.x, offset.y, 0f);
 
             elapsed += Time.unscaledDeltaTime;
             yield return null;
         }
 
-        Camera.main.transform.position = cameraBasePos;
+        cam.transform.position = cameraBasePos;
+    }
+
+    private void SetScoreUiVisible(bool visible)
+    {
+        if (scoreLabel != null)
+        {
+            scoreLabel.gameObject.SetActive(visible);
+        }
+
+        if (scoreText != null)
+        {
+            scoreText.gameObject.SetActive(visible);
+        }
+    }
+
+    private void HideDeathScreenImmediate()
+    {
+        DeathScreen screen = ResolveDeathScreen();
+        if (screen != null)
+        {
+            screen.HideImmediate();
+        }
+    }
+
+    private DeathScreen ResolveDeathScreen()
+    {
+        if (deathScreen != null)
+        {
+            return deathScreen;
+        }
+
+        deathScreen = FindFirstObjectByType<DeathScreen>(FindObjectsInactive.Include);
+        if (deathScreen != null)
+        {
+            return deathScreen;
+        }
+
+        return null;
+    }
+
+    private DeathData ChooseDeathData()
+    {
+        if (deathPresets == null || deathPresets.Length == 0)
+        {
+            deathPresets = Resources.LoadAll<DeathData>("DeathData");
+        }
+
+        if (deathPresets != null && deathPresets.Length > 0)
+        {
+            return deathPresets[Random.Range(0, deathPresets.Length)];
+        }
+
+        return CreateFallbackDeathData();
+    }
+
+    private static DeathData CreateFallbackDeathData()
+    {
+        int index = Random.Range(0, FallbackDeathDataVariantCount);
+        return index switch
+        {
+            0 => DeathData.CreateRuntime("Myvi", "Mangsa Kena Langgar Myvi\nDi Lorong Sempit", "Victim struck by Myvi in a narrow lane", "\"Semua orang tahu Myvi bawak laju. Tapi dia tetap tak elak.\"", "\"Everyone knows Myvis drive fast. He still didn't dodge.\"", "Allahyarham dikenali gemar makan nasi lemak pagi.\nSemoga rohnya tenang di jalan yang lebih selamat."),
+            1 => DeathData.CreateRuntime("Longkang", "Lelaki Tersasar Masuk\nLongkang Besar", "Man falls into massive monsoon drain", "\"Mak cik jiran dah warning minggu lepas. Dia tak dengar juga.\"", "\"The neighbour auntie warned him last week. He didn't listen.\"", "Mangsa dijumpai terapung bersama kasut sebelah.\nSiasatan sedang dijalankan."),
+            2 => DeathData.CreateRuntime("Durian", "Buah Durian Jatuh Mengejut,\nSeorang Terkorban", "Falling durian claims one unsuspecting victim", "\"Mati sebab durian. Sebenarnya, memang worth it.\"", "\"Death by durian. Honestly, worth it.\"", "Wangian durian masih tercium di lokasi kejadian.\nPihak berkuasa mohon orang ramai jauhi pokok berkenaan."),
+            3 => DeathData.CreateRuntime("Cuaca", "Tak Tahan Panas Malaysia,\nPancit Di Tengah Jalan", "Unable to withstand Malaysian heat, collapses mid-road", "\"Dah tahu panas, kenapa tak bawa air? Soalan polis.\"", "\"You knew it was hot. Why no water? Police are asking.\"", "Ini adalah kematian ke-3 akibat panas terik minggu ini.\nJPN mohon rakyat sentiasa bawa payung."),
+            _ => DeathData.CreateRuntime("Kucing", "Kucing Tidur Di Jalan,\nPemain Tak Sanggup Elak", "Cat sleeping on road, player unable to swerve", "\"Kucing tu memang bos kawasan situ. Semua orang pun tahu.\"", "\"That cat is the boss of this area. Everyone knows it.\"", "Kucing berkenaan masih tidur di lokasi kejadian.\nTidak memberikan sebarang kenyataan kepada media.")
+        };
+    }
+
+    private void UpdateScoreText()
+    {
+        if (scoreText != null)
+        {
+            scoreText.text = score.ToString();
+        }
+    }
+
+    private void ConfigureCharacterBody()
+    {
+        if (characterBody == null)
+        {
+            return;
+        }
+
+        // The grid controller owns position while the non-kinematic body still receives
+        // collision callbacks from kinematic vehicle prefabs.
+        characterBody.useGravity = false;
+        characterBody.isKinematic = false;
+        characterBody.constraints = RigidbodyConstraints.FreezeAll;
+    }
+
+    private void SetCharacterPosition(Vector3 position)
+    {
+        if (characterBody != null)
+        {
+            characterBody.position = position;
+            character.position = characterBody.position;
+            Physics.SyncTransforms();
+        }
+    }
+
+    private void SyncCharacterTransformToBody()
+    {
+        if (characterBody == null)
+        {
+            return;
+        }
+
+        character.position = characterBody.position;
+        Physics.SyncTransforms();
+    }
+
+    private void CacheHopAnimationDuration()
+    {
+        if (characterAnimator?.runtimeAnimatorController == null)
+        {
+            return;
+        }
+
+        foreach (AnimationClip clip in characterAnimator.runtimeAnimatorController.animationClips)
+        {
+            if (clip != null && clip.name == "Hop")
+            {
+                hopAnimationDuration = clip.length;
+                return;
+            }
+        }
+    }
+
+    private void PlayHopAnimation()
+    {
+        if (characterAnimator == null)
+        {
+            return;
+        }
+
+        characterAnimator.speed = Mathf.Max(1f, hopAnimationDuration / moveDuration);
+        characterAnimator.SetTrigger("Hop");
+    }
+
+    private void ResetHopAnimationSpeed()
+    {
+        if (characterAnimator != null)
+        {
+            characterAnimator.speed = 1f;
+        }
     }
 }
