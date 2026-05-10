@@ -3,13 +3,25 @@ using UnityEngine;
 
 public class Road : MonoBehaviour
 {
+    public struct SpawnConfig
+    {
+        public float MinSpeed;
+        public float MaxSpeed;
+        public int MinVehicleCount;
+        public int MaxVehicleCount;
+        public float TargetReactionTime;
+        public float ReactionTimeJitter;
+        public float MinGuaranteedSafeWindow;
+        public float PositiveDirectionChance;
+        public float WrapX;
+        public MalaysianRoadTextureController.RoadType? RoadType;
+    }
+
     private const int PlayableMinX = -10;
     private const int PlayableMaxX = 10;
     private const float DefaultVehicleHeight = 0.1f;
     private const float WrapMinX = -15f;
     private const float WrapMaxX = 15f;
-    private const int DirectionMultiplier = 2;
-    private const int DirectionOptionCount = 2;
     private const float MinSpeedStart = 1f;
     private const float MinSpeedEnd = 3f;
     private const float MaxSpeedStart = 3f;
@@ -20,6 +32,11 @@ public class Road : MonoBehaviour
     private const float MinVehicleGap = 2f;
     private const float MaxVehicleGap = 8f;
     private const float VehicleYawBase = 90f;
+    private const float MinReactionTime = 0.3f;
+    private const float MinSafeGap = 1.5f;
+    private const float MinConfigWrapX = 6f;
+    private const float DefaultPositiveDirectionChance = 0.5f;
+    private const float DefaultTargetReactionTime = 1f;
 
     [SerializeField] private List<Rigidbody> vehicles;
     [SerializeField] private RoadPotholeSpawner potholeSpawner;
@@ -42,6 +59,8 @@ public class Road : MonoBehaviour
 
     private int direction = 1;
     private float speed = 1f;
+    private float wrapMinX = WrapMinX;
+    private float wrapMaxX = WrapMaxX;
     private readonly List<Rigidbody> spawnedVehicles = new();
     private MalaysianRoadTextureController.RoadType currentRoadType;
 
@@ -49,13 +68,20 @@ public class Road : MonoBehaviour
 
     public HashSet<int> Init(float z)
     {
-        return Init(z, ChooseRoadType());
+        return Init(z, ChooseDefaultSpawnConfig(z));
     }
 
     public HashSet<int> Init(float z, MalaysianRoadTextureController.RoadType roadType)
     {
+        SpawnConfig config = ChooseDefaultSpawnConfig(z);
+        config.RoadType = roadType;
+        return Init(z, config);
+    }
+
+    public HashSet<int> Init(float z, SpawnConfig config)
+    {
         transform.position = new Vector3(0, 0, z);
-        currentRoadType = roadType;
+        currentRoadType = config.RoadType.HasValue ? config.RoadType.Value : ChooseRoadType();
 
         roadTextureController ??= GetComponent<MalaysianRoadTextureController>();
         roadTextureController?.SetRoadType(currentRoadType);
@@ -63,10 +89,17 @@ public class Road : MonoBehaviour
         potholeSpawner ??= GetComponent<RoadPotholeSpawner>();
         potholeSpawner?.RefreshPotholes();
 
-        direction = DirectionMultiplier * Random.Range(0, DirectionOptionCount) - 1;
+        float positiveDirectionChance = Mathf.Clamp01(config.PositiveDirectionChance);
+        if (Mathf.Approximately(positiveDirectionChance, 0f))
+        {
+            positiveDirectionChance = DefaultPositiveDirectionChance;
+        }
 
-        float minSpeed = Mathf.Lerp(MinSpeedStart, MinSpeedEnd, z / SpeedMaxDistance);
-        float maxSpeed = Mathf.Lerp(MaxSpeedStart, MaxSpeedEnd, z / SpeedMaxDistance);
+        direction = Random.value < positiveDirectionChance ? 1 : -1;
+        ConfigureWrapBounds(config.WrapX);
+
+        float minSpeed = Mathf.Max(MinSpeedStart, Mathf.Min(config.MinSpeed, config.MaxSpeed));
+        float maxSpeed = Mathf.Max(minSpeed, Mathf.Max(config.MinSpeed, config.MaxSpeed));
         speed = Random.Range(minSpeed, maxSpeed);
 
         if (vehicles == null || vehicles.Count == 0)
@@ -76,8 +109,10 @@ public class Road : MonoBehaviour
         }
 
         int vehicleIndex = Random.Range(0, vehicles.Count);
-        int vehicleCount = Random.Range(MinVehicleCountInclusive, MaxVehicleCountExclusive);
-        float gap = Random.Range(MinVehicleGap, MaxVehicleGap);
+        int minVehicleCount = Mathf.Max(MinVehicleCountInclusive, config.MinVehicleCount);
+        int maxVehicleCount = Mathf.Max(minVehicleCount, config.MaxVehicleCount);
+        int vehicleCount = Random.Range(minVehicleCount, maxVehicleCount + 1);
+        float gap = CalculateSafeGap(vehicleCount, config);
 
         for (int i = 0; i < vehicleCount; i++)
         {
@@ -125,17 +160,48 @@ public class Road : MonoBehaviour
             vehicle.MovePosition(vehicle.position + moveAmount);
 
             Vector3 pos = vehicle.position;
-            if (direction > 0 && pos.x > WrapMaxX)
+            if (direction > 0 && pos.x > wrapMaxX)
             {
-                pos.x = WrapMinX;
+                pos.x = wrapMinX;
                 vehicle.position = pos;
             }
-            else if (direction < 0 && pos.x < WrapMinX)
+            else if (direction < 0 && pos.x < wrapMinX)
             {
-                pos.x = WrapMaxX;
+                pos.x = wrapMaxX;
                 vehicle.position = pos;
             }
         }
+    }
+
+    private void ConfigureWrapBounds(float configuredWrapX)
+    {
+        float wrapX = configuredWrapX > 0f
+            ? Mathf.Max(MinConfigWrapX, configuredWrapX)
+            : WrapMaxX;
+
+        wrapMinX = -wrapX;
+        wrapMaxX = wrapX;
+    }
+
+    private float CalculateSafeGap(int vehicleCount, SpawnConfig config)
+    {
+        float fallbackGap = Random.Range(MinVehicleGap, MaxVehicleGap);
+        if (vehicleCount <= 0)
+        {
+            return fallbackGap;
+        }
+
+        float reactionTime = Mathf.Max(
+            MinReactionTime,
+            config.TargetReactionTime + Random.Range(-config.ReactionTimeJitter, config.ReactionTimeJitter));
+        float laneLength = Mathf.Abs(wrapMaxX - wrapMinX);
+        float maxBlockedDistance = laneLength - speed * Mathf.Max(0f, config.MinGuaranteedSafeWindow);
+        float maxGapByCount = vehicleCount > 1
+            ? maxBlockedDistance / (vehicleCount - 1)
+            : laneLength;
+        float reactionGap = speed * reactionTime;
+
+        return Mathf.Clamp(reactionGap, MinSafeGap, Mathf.Max(MinSafeGap, maxGapByCount));
     }
 
     private static float GetListValue(IReadOnlyList<float> values, int index, float fallback)
@@ -151,6 +217,24 @@ public class Road : MonoBehaviour
         }
 
         return roadTypePool[Random.Range(0, roadTypePool.Count)];
+    }
+
+    private SpawnConfig ChooseDefaultSpawnConfig(float z)
+    {
+        float progress = z / SpeedMaxDistance;
+        return new SpawnConfig
+        {
+            MinSpeed = Mathf.Lerp(MinSpeedStart, MinSpeedEnd, progress),
+            MaxSpeed = Mathf.Lerp(MaxSpeedStart, MaxSpeedEnd, progress),
+            MinVehicleCount = MinVehicleCountInclusive,
+            MaxVehicleCount = MaxVehicleCountExclusive - 1,
+            TargetReactionTime = DefaultTargetReactionTime,
+            ReactionTimeJitter = 0f,
+            MinGuaranteedSafeWindow = 0f,
+            PositiveDirectionChance = DefaultPositiveDirectionChance,
+            WrapX = WrapMaxX,
+            RoadType = ChooseRoadType()
+        };
     }
 
     private static HashSet<int> RoadEdgeObstacles()

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public class GameManager : MonoBehaviour
@@ -22,6 +23,83 @@ public class GameManager : MonoBehaviour
     private const float RiverDeathHeightOffset = 0.2f;
     private const float RiverDeathForwardOffset = 0.5f;
     private const int FallbackDeathDataVariantCount = 5;
+    private const float DefaultPositiveDirectionChance = 0.5f;
+    private const float MinTrafficSpeed = 0.5f;
+    private const int MilestoneFontSize = 52;
+    private const float MilestoneAnchorX = 0.5f;
+    private const float MilestoneAnchorY = 0.72f;
+    private const float MilestoneWidth = 520f;
+    private const float MilestoneHeight = 110f;
+
+    [System.Serializable]
+    private sealed class TrafficTier
+    {
+        [Header("Tier activation")]
+        [SerializeField] private int minRow = 0;
+
+        [Header("Road frequency")]
+        [Range(0f, 1f)]
+        [SerializeField] private float roadProbability = 0.3f;
+
+        [Header("Vehicle pacing")]
+        [SerializeField] private float minSpeed = 1f;
+        [SerializeField] private float maxSpeed = 3f;
+        [SerializeField] private int minVehicleCount = 1;
+        [SerializeField] private int maxVehicleCount = 3;
+        [SerializeField] private float targetReactionTime = 2f;
+        [SerializeField] private float reactionTimeJitter = 0.2f;
+        [SerializeField] private float guaranteedSafeWindow = 1f;
+
+        public TrafficTier()
+        {
+        }
+
+        public TrafficTier(
+            int minRow,
+            float roadProbability,
+            float minSpeed,
+            float maxSpeed,
+            int minVehicleCount,
+            int maxVehicleCount,
+            float targetReactionTime,
+            float reactionTimeJitter,
+            float guaranteedSafeWindow)
+        {
+            this.minRow = minRow;
+            this.roadProbability = roadProbability;
+            this.minSpeed = minSpeed;
+            this.maxSpeed = maxSpeed;
+            this.minVehicleCount = minVehicleCount;
+            this.maxVehicleCount = maxVehicleCount;
+            this.targetReactionTime = targetReactionTime;
+            this.reactionTimeJitter = reactionTimeJitter;
+            this.guaranteedSafeWindow = guaranteedSafeWindow;
+            Validate();
+        }
+
+        public int MinRow => minRow;
+        public float RoadProbability => roadProbability;
+        public float MinSpeed => minSpeed;
+        public float MaxSpeed => maxSpeed;
+        public int MinVehicleCount => minVehicleCount;
+        public int MaxVehicleCount => maxVehicleCount;
+        public float TargetReactionTime => targetReactionTime;
+        public float ReactionTimeJitter => reactionTimeJitter;
+        public float GuaranteedSafeWindow => guaranteedSafeWindow;
+
+        public void Validate()
+        {
+            minRow = Mathf.Max(0, minRow);
+            roadProbability = Mathf.Clamp01(roadProbability);
+            minSpeed = Mathf.Max(MinTrafficSpeed, minSpeed);
+            maxSpeed = Mathf.Max(minSpeed, maxSpeed);
+            minVehicleCount = Mathf.Max(0, minVehicleCount);
+            maxVehicleCount = Mathf.Max(minVehicleCount, maxVehicleCount);
+            targetReactionTime = Mathf.Max(0f, targetReactionTime);
+            reactionTimeJitter = Mathf.Max(0f, reactionTimeJitter);
+            guaranteedSafeWindow = Mathf.Max(0f, guaranteedSafeWindow);
+        }
+    }
 
     [Header("Game objects")]
     [SerializeField] private Transform character;
@@ -45,6 +123,24 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float shakeDuration = 0.15f;
     [SerializeField] private float shakeMagnitude = 0.15f;
     [SerializeField] private Vector3 cameraOffset = new(3f, 9f, -5f);
+
+    [Header("Traffic tuning")]
+    [SerializeField] private List<TrafficTier> trafficTiers = new()
+    {
+        new(0, 0.30f, 1f, 2.75f, 1, 2, 2f, 0.2f, 1.3f),
+        new(40, 0.38f, 2f, 4.75f, 1, 3, 1f, 0.15f, 0.95f),
+        new(90, 0.50f, 3.25f, 6f, 2, 3, 0.8f, 0.12f, 0.75f)
+    };
+    [SerializeField] private float trafficWrapX = 15f;
+    [SerializeField] private int leftEdgeThreshold = -4;
+    [Range(0f, 0.4f)]
+    [SerializeField] private float leftEdgeDirectionBias = 0.16f;
+
+    [Header("Milestone feedback")]
+    [SerializeField] private TextMeshProUGUI milestoneText;
+    [SerializeField] private int[] milestoneRows = { 50, 100, 200 };
+    [SerializeField] private string milestoneFormat = "{0} baris! Gila!";
+    [SerializeField] private float milestoneFlashDuration = 1.5f;
 
     private enum GameState
     {
@@ -81,9 +177,13 @@ public class GameManager : MonoBehaviour
     private float fixedCameraY;
     private Vector3 cameraBasePos;
     private Coroutine deathSequenceRoutine;
+    private Coroutine milestoneRoutine;
+    private readonly HashSet<int> shownMilestones = new();
 
     private void Awake()
     {
+        ConfigureDefaultTrafficTiers();
+        ValidateTrafficTiers();
         Application.targetFrameRate = TargetFrameRate;
         QualitySettings.vSyncCount = 0;
 
@@ -111,6 +211,10 @@ public class GameManager : MonoBehaviour
         shakeDuration = Mathf.Max(0f, shakeDuration);
         shakeMagnitude = Mathf.Abs(shakeMagnitude);
         deathScreenDelay = Mathf.Max(0f, deathScreenDelay);
+        trafficWrapX = Mathf.Max(1f, trafficWrapX);
+        leftEdgeDirectionBias = Mathf.Clamp(leftEdgeDirectionBias, 0f, 0.4f);
+        milestoneFlashDuration = Mathf.Max(0f, milestoneFlashDuration);
+        ValidateTrafficTiers();
     }
 
     // Resets runtime state and rebuilds the starting terrain rows.
@@ -123,6 +227,8 @@ public class GameManager : MonoBehaviour
         }
 
         gameState = GameState.Ready;
+        shownMilestones.Clear();
+        HideMilestoneImmediate();
 
         HideDeathScreenImmediate();
         SetScoreUiVisible(true);
@@ -200,7 +306,7 @@ public class GameManager : MonoBehaviour
         }
 
         Road road = Instantiate(roadPrefab, terrainHolder);
-        terrainRows.Add(new TerrainRow(RoadHeight, road.Init(spawnLocation), road.gameObject));
+        terrainRows.Add(new TerrainRow(RoadHeight, road.Init(spawnLocation, BuildRoadConfig(GetTrafficTier(spawnLocation))), road.gameObject));
         road.gameObject.name = $"{spawnLocation} - {label}";
         spawnLocation++;
         return true;
@@ -208,7 +314,7 @@ public class GameManager : MonoBehaviour
 
     private bool SpawnTerrainRow()
     {
-        float roadProbability = Mathf.Lerp(MinRoadProbability, MaxRoadProbability, spawnLocation / RoadProbabilityMaxDistance);
+        float roadProbability = GetRoadProbability(spawnLocation);
 
         if (Random.value < roadProbability)
         {
@@ -298,6 +404,7 @@ public class GameManager : MonoBehaviour
         {
             score = destination.y + 1;
             UpdateScoreText();
+            TryShowMilestone(score);
         }
 
         EnsureTerrainAhead();
@@ -414,6 +521,7 @@ public class GameManager : MonoBehaviour
         }
 
         deathSequenceRoutine = StartCoroutine(PlayerDeathSequence());
+        HideMilestoneImmediate();
     }
 
     private IEnumerator PlayerDeathSequence()
@@ -487,6 +595,216 @@ public class GameManager : MonoBehaviour
         if (scoreText != null)
         {
             scoreText.gameObject.SetActive(visible);
+        }
+    }
+
+    private void ConfigureDefaultTrafficTiers()
+    {
+        if (trafficTiers != null && trafficTiers.Count > 0)
+        {
+            return;
+        }
+
+        trafficTiers = new List<TrafficTier>
+        {
+            new(0, 0.30f, 1f, 2.75f, 1, 2, 2f, 0.2f, 1.3f),
+            new(40, 0.38f, 2f, 4.75f, 1, 3, 1f, 0.15f, 0.95f),
+            new(90, 0.50f, 3.25f, 6f, 2, 3, 0.8f, 0.12f, 0.75f)
+        };
+    }
+
+    private void ValidateTrafficTiers()
+    {
+        if (trafficTiers == null)
+        {
+            trafficTiers = new List<TrafficTier>();
+        }
+
+        foreach (TrafficTier tier in trafficTiers)
+        {
+            tier?.Validate();
+        }
+
+        trafficTiers.Sort((left, right) =>
+        {
+            if (left == null && right == null)
+            {
+                return 0;
+            }
+
+            if (left == null)
+            {
+                return 1;
+            }
+
+            if (right == null)
+            {
+                return -1;
+            }
+
+            return left.MinRow.CompareTo(right.MinRow);
+        });
+    }
+
+    private TrafficTier GetTrafficTier(int row)
+    {
+        ValidateTrafficTiers();
+
+        TrafficTier selectedTier = null;
+        foreach (TrafficTier tier in trafficTiers)
+        {
+            if (tier == null)
+            {
+                continue;
+            }
+
+            if (row >= tier.MinRow)
+            {
+                selectedTier = tier;
+                continue;
+            }
+
+            break;
+        }
+
+        return selectedTier;
+    }
+
+    private float GetRoadProbability(int row)
+    {
+        TrafficTier tier = GetTrafficTier(row);
+        if (tier != null)
+        {
+            return tier.RoadProbability;
+        }
+
+        return Mathf.Lerp(MinRoadProbability, MaxRoadProbability, row / RoadProbabilityMaxDistance);
+    }
+
+    private Road.SpawnConfig BuildRoadConfig(TrafficTier tier)
+    {
+        float fallbackProgress = spawnLocation / RoadProbabilityMaxDistance;
+        float minSpeed = tier != null
+            ? tier.MinSpeed
+            : Mathf.Lerp(1f, 3f, fallbackProgress);
+        float maxSpeed = tier != null
+            ? tier.MaxSpeed
+            : Mathf.Lerp(3f, 8f, fallbackProgress);
+
+        float positiveDirectionChance = DefaultPositiveDirectionChance;
+        if (characterPos.x <= leftEdgeThreshold)
+        {
+            positiveDirectionChance += leftEdgeDirectionBias;
+        }
+
+        return new Road.SpawnConfig
+        {
+            MinSpeed = Mathf.Max(MinTrafficSpeed, Mathf.Min(minSpeed, maxSpeed)),
+            MaxSpeed = Mathf.Max(minSpeed, maxSpeed),
+            MinVehicleCount = tier != null ? tier.MinVehicleCount : 0,
+            MaxVehicleCount = tier != null ? tier.MaxVehicleCount : 3,
+            TargetReactionTime = tier != null ? tier.TargetReactionTime : 1f,
+            ReactionTimeJitter = tier != null ? tier.ReactionTimeJitter : 0.2f,
+            MinGuaranteedSafeWindow = tier != null ? tier.GuaranteedSafeWindow : 1f,
+            PositiveDirectionChance = Mathf.Clamp01(positiveDirectionChance),
+            WrapX = trafficWrapX
+        };
+    }
+
+    private void TryShowMilestone(int currentScore)
+    {
+        if (milestoneRows == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < milestoneRows.Length; i++)
+        {
+            int milestone = milestoneRows[i];
+            if (milestone <= 0 || currentScore != milestone || shownMilestones.Contains(milestone))
+            {
+                continue;
+            }
+
+            shownMilestones.Add(milestone);
+            ShowMilestone(string.Format(milestoneFormat, milestone));
+            return;
+        }
+    }
+
+    private void ShowMilestone(string message)
+    {
+        TextMeshProUGUI target = ResolveMilestoneText();
+        if (target == null)
+        {
+            return;
+        }
+
+        if (milestoneRoutine != null)
+        {
+            StopCoroutine(milestoneRoutine);
+        }
+
+        milestoneRoutine = StartCoroutine(FlashMilestone(target, message));
+    }
+
+    private TextMeshProUGUI ResolveMilestoneText()
+    {
+        if (milestoneText != null)
+        {
+            return milestoneText;
+        }
+
+        if (scoreText == null || scoreText.transform.parent == null)
+        {
+            return null;
+        }
+
+        GameObject milestoneObject = new("MilestoneText", typeof(RectTransform));
+        milestoneObject.transform.SetParent(scoreText.transform.parent, false);
+        milestoneText = milestoneObject.AddComponent<TextMeshProUGUI>();
+        milestoneText.alignment = TextAlignmentOptions.Center;
+        milestoneText.fontSize = MilestoneFontSize;
+        milestoneText.fontStyle = FontStyles.Bold;
+        milestoneText.color = Color.white;
+        milestoneText.raycastTarget = false;
+        milestoneText.gameObject.SetActive(false);
+
+        RectTransform rectTransform = milestoneText.rectTransform;
+        rectTransform.anchorMin = new Vector2(MilestoneAnchorX, MilestoneAnchorY);
+        rectTransform.anchorMax = new Vector2(MilestoneAnchorX, MilestoneAnchorY);
+        rectTransform.pivot = new Vector2(MilestoneAnchorX, MilestoneAnchorX);
+        rectTransform.anchoredPosition = Vector2.zero;
+        rectTransform.sizeDelta = new Vector2(MilestoneWidth, MilestoneHeight);
+
+        return milestoneText;
+    }
+
+    private IEnumerator FlashMilestone(TextMeshProUGUI target, string message)
+    {
+        target.text = message;
+        target.gameObject.SetActive(true);
+
+        if (milestoneFlashDuration > 0f)
+        {
+            yield return new WaitForSecondsRealtime(milestoneFlashDuration);
+        }
+
+        target.gameObject.SetActive(false);
+        milestoneRoutine = null;
+    }
+
+    private void HideMilestoneImmediate()
+    {
+        if (milestoneRoutine != null)
+        {
+            StopCoroutine(milestoneRoutine);
+            milestoneRoutine = null;
+        }
+
+        if (milestoneText != null)
+        {
+            milestoneText.gameObject.SetActive(false);
         }
     }
 
