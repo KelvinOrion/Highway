@@ -6,8 +6,17 @@ public class Grass : MonoBehaviour
     private const int MinTreeCount = 1;
     private const int MaxTreeCountExclusive = 5;
     private const float TreeHeight = 0.2f;
+    private const float DefaultPowerupChance = 0.08f;
+    private const float PowerupHeight = 0.4f;
+    private const float PowerupSpawnYOffset = 0.5f;
+    private const int PowerupLaneX = 0;
 
     [SerializeField] private List<Transform> treePrefabs;
+
+    [Header("Powerups")]
+    [Range(0f, 1f)]
+    [SerializeField] private float spawnPowerupChance = DefaultPowerupChance;
+    [SerializeField] private PowerupBase[] powerupPrefabs;
 
     // These bounds must stay aligned with GameManager's playable x range.
     [SerializeField] private int playableAreaMinX = -10;
@@ -20,6 +29,11 @@ public class Grass : MonoBehaviour
         transform.position = new Vector3(0, 0, z);
 
         HashSet<int> locations = new() { playableAreaMinX, playableAreaMaxX };
+
+        if (TrySpawnPowerup())
+        {
+            return locations;
+        }
 
         if (treePrefabs == null || treePrefabs.Count == 0)
         {
@@ -46,6 +60,41 @@ public class Grass : MonoBehaviour
         }
 
         return locations;
+    }
+
+    private void OnValidate()
+    {
+        spawnPowerupChance = Mathf.Clamp01(spawnPowerupChance);
+    }
+
+    private bool TrySpawnPowerup()
+    {
+        if (!CanRollPowerup() || Random.value >= spawnPowerupChance)
+        {
+            return false;
+        }
+
+        int prefabIndex = Random.Range(0, powerupPrefabs.Length);
+        PowerupBase prefab = powerupPrefabs[prefabIndex];
+        if (prefab == null)
+        {
+            Debug.LogWarning($"{nameof(Grass)} has an empty powerup prefab slot at index {prefabIndex}.", this);
+            return false;
+        }
+
+        PowerupBase powerup = Instantiate(prefab, transform);
+        powerup.transform.localPosition = new Vector3(PowerupLaneX, PowerupHeight + PowerupSpawnYOffset, 0f);
+        return true;
+    }
+
+    private bool CanRollPowerup()
+    {
+        return spawnPowerupChance > 0f &&
+               powerupPrefabs != null &&
+               powerupPrefabs.Length > 0 &&
+               !PowerupBase.HasLivePowerup &&
+               !TehTarikPowerup.IsActive &&
+               !HandPowerup.IsActive;
     }
 
     private List<int> BuildAvailableColumns()

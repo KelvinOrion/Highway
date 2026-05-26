@@ -169,6 +169,7 @@ public class GameManager : MonoBehaviour
     private Rigidbody characterBody;
     private Animator characterAnimator;
     private float hopAnimationDuration = DefaultHopAnimationDuration;
+    private float defaultMoveDuration;
     private GameState gameState;
     private Vector2Int characterPos;
     private int score;
@@ -176,14 +177,19 @@ public class GameManager : MonoBehaviour
     private int spawnLocation;
     private float fixedCameraY;
     private Vector3 cameraBasePos;
+    private Vector3 cameraShakeOffset;
     private Coroutine deathSequenceRoutine;
+    private Coroutine cameraShakeRoutine;
     private Coroutine milestoneRoutine;
     private readonly HashSet<int> shownMilestones = new();
+
+    public float MoveDuration => moveDuration;
 
     private void Awake()
     {
         ConfigureDefaultTrafficTiers();
         ValidateTrafficTiers();
+        defaultMoveDuration = moveDuration;
         Application.targetFrameRate = TargetFrameRate;
         QualitySettings.vSyncCount = 0;
 
@@ -220,12 +226,15 @@ public class GameManager : MonoBehaviour
     // Resets runtime state and rebuilds the starting terrain rows.
     private void NewLevel()
     {
+        Time.timeScale = 1f;
+
         if (deathSequenceRoutine != null)
         {
             StopCoroutine(deathSequenceRoutine);
             deathSequenceRoutine = null;
         }
 
+        ResetPowerups();
         gameState = GameState.Ready;
         shownMilestones.Clear();
         HideMilestoneImmediate();
@@ -237,6 +246,14 @@ public class GameManager : MonoBehaviour
         ClearTerrain();
         SpawnInitialTerrain();
         ResetCameraToPlayer();
+    }
+
+    private void ResetPowerups()
+    {
+        TehTarikPowerup.ResetRuntimeState();
+        HandPowerup.ResetRuntimeState();
+        PowerupBase.ClearLivePowerups();
+        SetMoveDuration(defaultMoveDuration);
     }
 
     private void ResetCharacter()
@@ -465,8 +482,8 @@ public class GameManager : MonoBehaviour
         }
 
         Vector3 targetPos = GetCameraTargetPosition(character.position);
-        cam.transform.position = targetPos;
         cameraBasePos = targetPos;
+        cam.transform.position = targetPos + cameraShakeOffset;
     }
 
     // Called by InputRouter. Replaces all legacy Input polling.
@@ -486,6 +503,14 @@ public class GameManager : MonoBehaviour
 
     private void ResetCameraToPlayer()
     {
+        if (cameraShakeRoutine != null)
+        {
+            StopCoroutine(cameraShakeRoutine);
+            cameraShakeRoutine = null;
+        }
+
+        cameraShakeOffset = Vector3.zero;
+
         Camera cam = Camera.main;
         if (cam == null || character == null)
         {
@@ -526,7 +551,7 @@ public class GameManager : MonoBehaviour
 
     private IEnumerator PlayerDeathSequence()
     {
-        StartCoroutine(ScreenShake());
+        PlayCameraShake(shakeDuration, shakeMagnitude);
 
         SetScoreUiVisible(false);
 
@@ -549,6 +574,21 @@ public class GameManager : MonoBehaviour
         coinsCollected = Mathf.Max(0, coinsCollected + amount);
     }
 
+    public void SetMoveDuration(float duration)
+    {
+        moveDuration = Mathf.Max(MinMoveDuration, duration);
+    }
+
+    public void PlayCameraShake(float duration, float magnitude)
+    {
+        if (cameraShakeRoutine != null)
+        {
+            StopCoroutine(cameraShakeRoutine);
+        }
+
+        cameraShakeRoutine = StartCoroutine(ScreenShake(Mathf.Max(0f, duration), Mathf.Abs(magnitude)));
+    }
+
     public void OnPlayerDeath(DeathData data)
     {
         Time.timeScale = 0f;
@@ -563,26 +603,30 @@ public class GameManager : MonoBehaviour
         screen.Show(data != null ? data : ChooseDeathData(), score, coinsCollected);
     }
 
-    private IEnumerator ScreenShake()
+    private IEnumerator ScreenShake(float duration, float magnitude)
     {
         Camera cam = Camera.main;
         if (cam == null)
         {
+            cameraShakeRoutine = null;
             yield break;
         }
 
         float elapsed = 0f;
 
-        while (elapsed < shakeDuration)
+        while (elapsed < duration)
         {
-            Vector3 offset = Random.insideUnitSphere * shakeMagnitude;
-            cam.transform.position = cameraBasePos + new Vector3(offset.x, offset.y, 0f);
+            Vector3 offset = Random.insideUnitSphere * magnitude;
+            cameraShakeOffset = new Vector3(offset.x, offset.y, 0f);
+            cam.transform.position = cameraBasePos + cameraShakeOffset;
 
             elapsed += Time.unscaledDeltaTime;
             yield return null;
         }
 
+        cameraShakeOffset = Vector3.zero;
         cam.transform.position = cameraBasePos;
+        cameraShakeRoutine = null;
     }
 
     private void SetScoreUiVisible(bool visible)

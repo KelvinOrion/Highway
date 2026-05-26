@@ -133,6 +133,11 @@ public class Road : MonoBehaviour
                 rotation,
                 transform);
 
+            if (HandPowerup.IsActive)
+            {
+                HandPowerup.FreezeVehicle(vehicle);
+            }
+
             spawnedVehicles.Add(vehicle);
         }
 
@@ -149,6 +154,11 @@ public class Road : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (HandPowerup.IsActive)
+        {
+            return;
+        }
+
         foreach (Rigidbody vehicle in spawnedVehicles)
         {
             if (vehicle == null)

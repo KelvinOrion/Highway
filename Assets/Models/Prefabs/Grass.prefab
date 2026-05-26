@@ -165,7 +165,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8b74983411f0e14e93c969b7d7f0f57, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Grass
-  treePrefab: {fileID: 8464851791046468045, guid: 292740752edfd0d4b86c1f786f3e9b1d, type: 3}
+  treePrefabs:
+  - {fileID: 8464851791046468045, guid: 292740752edfd0d4b86c1f786f3e9b1d, type: 3}
+  spawnPowerupChance: 0.08
+  powerupPrefabs:
+  - {fileID: 2878101118600294151, guid: 445ae7a8db614d04badd116f7ed114a8, type: 3}
+  - {fileID: 3889179401628306513, guid: c62fab8a355f454ebfeb5244db0f7d44, type: 3}
+  playableAreaMinX: -10
+  playableAreaMaxX: 10
 --- !u!1 &3105442563473279786
 GameObject:
   m_ObjectHideFlags: 0
