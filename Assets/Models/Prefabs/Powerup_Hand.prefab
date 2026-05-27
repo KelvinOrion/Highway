@@ -51,8 +51,12 @@ MonoBehaviour:
   playerTag: Player
   bobAmplitude: 0.1
   bobSpeed: 2
+  circularMotionRadius: 0.12
+  circularMotionSpeed: 2
+  rotationSpeed: 90
   placeholderTint: {r: 1, g: 1, b: 1, a: 1}
   duration: 5
+  countdownTick: {fileID: 8300000, guid: 2e0a96adb7f63d94cb5d4a2aa7644cff, type: 3}
 --- !u!212 &3889179401628306514
 SpriteRenderer:
   serializedVersion: 2
