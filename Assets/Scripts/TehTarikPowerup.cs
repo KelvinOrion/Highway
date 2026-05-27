@@ -9,19 +9,30 @@ public sealed class TehTarikPowerup : PowerupBase
     private const float CameraShakeDuration = 0.3f;
     private const float CameraZoomMultiplier = 0.85f;
     private const float CameraZoomDuration = 0.3f;
-    private const float SpeedLinesAlpha = 0.6f;
+    private const float SpeedLineImageAlpha = 0.4f;
+    private const float SpeedLineFadeInDuration = 0.2f;
+    private const float SpeedLineFadeOutDuration = 0.3f;
 
     [SerializeField] private float speedMultiplier = 1.6f;
     [SerializeField] private float duration = 5f;
     [SerializeField] private float shakeMagnitude = 0.05f;
     [SerializeField] private Texture speedLinesTexture;
+    [SerializeField] private float speedLineARotationSpeed = 12f;
+    [SerializeField] private float speedLineBRotationSpeed = -9f;
 
     private static Coroutine activeRoutine;
     private static Coroutine activeZoomRoutine;
+    private static Coroutine activeSpeedLineRotationRoutine;
+    private static Coroutine activeSpeedLineFadeRoutine;
     private static GameManager activeManager;
     private static MonoBehaviour activeZoomHost;
+    private static MonoBehaviour activeSpeedLineHost;
     private static Camera activeCamera;
-    private static RawImage activeSpeedLinesOverlay;
+    private static GameObject activeSpeedLineOverlay;
+    private static RawImage activeSpeedLineA;
+    private static RawImage activeSpeedLineB;
+    private static RectTransform activeSpeedLineATransform;
+    private static RectTransform activeSpeedLineBTransform;
     private static Texture2D placeholderSpeedLinesTexture;
     private static float originalMoveDuration;
     private static float originalCameraZoom;
@@ -39,7 +50,7 @@ public sealed class TehTarikPowerup : PowerupBase
 
         StopActiveZoomRoutine();
         RestoreCameraZoomImmediate();
-        HideSpeedLines();
+        HideSpeedLinesImmediate();
 
         activeRoutine = null;
         activeManager = null;
@@ -74,7 +85,7 @@ public sealed class TehTarikPowerup : PowerupBase
         float multiplier = Mathf.Max(MinSpeedMultiplier, speedMultiplier);
         manager.SetMoveDuration(originalMoveDuration / multiplier);
         manager.PlayCameraShake(CameraShakeDuration, shakeMagnitude);
-        ShowSpeedLines(speedLinesTexture);
+        ShowSpeedLines(manager, speedLinesTexture, speedLineARotationSpeed, speedLineBRotationSpeed);
         StartCameraZoom(manager, Camera.main);
 
         activeRoutine = manager.StartCoroutine(RestoreAfterDuration(manager, Mathf.Max(0f, duration), originalMoveDuration));
@@ -92,7 +103,7 @@ public sealed class TehTarikPowerup : PowerupBase
             manager.SetMoveDuration(restoreMoveDuration);
         }
 
-        HideSpeedLines();
+        HideSpeedLines(manager);
         StartCameraZoomRestore(manager);
 
         if (activeManager == manager)
@@ -104,54 +115,236 @@ public sealed class TehTarikPowerup : PowerupBase
         }
     }
 
-    private static void ShowSpeedLines(Texture texture)
+    private static void ShowSpeedLines(MonoBehaviour host, Texture texture, float speedLineASpeed, float speedLineBSpeed)
     {
-        RawImage overlay = ResolveSpeedLinesOverlay();
-        if (overlay == null)
+        if (host == null || !ResolveSpeedLinesOverlay())
         {
             return;
         }
 
-        overlay.texture = texture != null ? texture : GetPlaceholderSpeedLinesTexture();
-        overlay.color = new Color(1f, 1f, 1f, SpeedLinesAlpha);
-        overlay.gameObject.SetActive(true);
-        overlay.transform.SetAsLastSibling();
+        StopSpeedLineCoroutines();
+        activeSpeedLineHost = host;
+
+        Texture overlayTexture = texture != null ? texture : GetPlaceholderSpeedLinesTexture();
+        ConfigureSpeedLineImage(activeSpeedLineA, overlayTexture, 0f);
+        ConfigureSpeedLineImage(activeSpeedLineB, overlayTexture, 0f);
+
+        activeSpeedLineOverlay.SetActive(true);
+        activeSpeedLineOverlay.transform.SetAsLastSibling();
+
+        activeSpeedLineRotationRoutine = host.StartCoroutine(RotateSpeedLines(speedLineASpeed, speedLineBSpeed));
+        activeSpeedLineFadeRoutine = host.StartCoroutine(FadeSpeedLines(0f, SpeedLineImageAlpha, SpeedLineFadeInDuration, disableOnComplete: false));
     }
 
-    private static void HideSpeedLines()
+    private static void HideSpeedLines(MonoBehaviour host)
     {
-        if (activeSpeedLinesOverlay != null)
+        if (host == null || activeSpeedLineOverlay == null)
         {
-            activeSpeedLinesOverlay.gameObject.SetActive(false);
+            HideSpeedLinesImmediate();
+            return;
         }
+
+        if (!activeSpeedLineOverlay.activeSelf)
+        {
+            StopSpeedLineCoroutines();
+            activeSpeedLineHost = null;
+            return;
+        }
+
+        if (activeSpeedLineFadeRoutine != null && activeSpeedLineHost != null)
+        {
+            activeSpeedLineHost.StopCoroutine(activeSpeedLineFadeRoutine);
+            activeSpeedLineFadeRoutine = null;
+        }
+
+        activeSpeedLineHost = host;
+        activeSpeedLineFadeRoutine = host.StartCoroutine(FadeSpeedLines(GetSpeedLineAlpha(activeSpeedLineA), 0f, SpeedLineFadeOutDuration, disableOnComplete: true));
     }
 
-    private static RawImage ResolveSpeedLinesOverlay()
+    private static void HideSpeedLinesImmediate()
     {
-        if (activeSpeedLinesOverlay != null)
+        StopSpeedLineCoroutines();
+        SetSpeedLineAlpha(0f);
+
+        if (activeSpeedLineOverlay != null)
         {
-            return activeSpeedLinesOverlay;
+            activeSpeedLineOverlay.SetActive(false);
+        }
+
+        activeSpeedLineHost = null;
+    }
+
+    private static bool ResolveSpeedLinesOverlay()
+    {
+        if (activeSpeedLineOverlay != null &&
+            activeSpeedLineA != null &&
+            activeSpeedLineB != null &&
+            activeSpeedLineATransform != null &&
+            activeSpeedLineBTransform != null)
+        {
+            return true;
         }
 
         Canvas canvas = ResolveCanvas();
         if (canvas == null)
         {
-            return null;
+            return false;
         }
 
-        GameObject overlayObject = new("TehTarik_SpeedLinesOverlay", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
-        overlayObject.transform.SetParent(canvas.transform, false);
+        activeSpeedLineOverlay = new GameObject("SpeedLineOverlay", typeof(RectTransform));
+        activeSpeedLineOverlay.transform.SetParent(canvas.transform, false);
+        StretchToFullScreen(activeSpeedLineOverlay.GetComponent<RectTransform>());
 
-        RectTransform rectTransform = overlayObject.GetComponent<RectTransform>();
+        activeSpeedLineA = CreateSpeedLineImage("SpeedLineA", activeSpeedLineOverlay.transform, out activeSpeedLineATransform);
+        activeSpeedLineB = CreateSpeedLineImage("SpeedLineB", activeSpeedLineOverlay.transform, out activeSpeedLineBTransform);
+
+        activeSpeedLineOverlay.SetActive(false);
+        return true;
+    }
+
+    private static RawImage CreateSpeedLineImage(string name, Transform parent, out RectTransform rectTransform)
+    {
+        GameObject imageObject = new(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
+        imageObject.transform.SetParent(parent, false);
+
+        rectTransform = imageObject.GetComponent<RectTransform>();
+        StretchToFullScreen(rectTransform);
+
+        RawImage image = imageObject.GetComponent<RawImage>();
+        image.raycastTarget = false;
+        image.uvRect = new Rect(0f, 0f, 1f, 1f);
+        image.color = new Color(1f, 1f, 1f, 0f);
+        return image;
+    }
+
+    private static void StretchToFullScreen(RectTransform rectTransform)
+    {
+        if (rectTransform == null)
+        {
+            return;
+        }
+
         rectTransform.anchorMin = Vector2.zero;
         rectTransform.anchorMax = Vector2.one;
         rectTransform.offsetMin = Vector2.zero;
         rectTransform.offsetMax = Vector2.zero;
+    }
 
-        activeSpeedLinesOverlay = overlayObject.GetComponent<RawImage>();
-        activeSpeedLinesOverlay.raycastTarget = false;
-        activeSpeedLinesOverlay.gameObject.SetActive(false);
-        return activeSpeedLinesOverlay;
+    private static void ConfigureSpeedLineImage(RawImage image, Texture texture, float alpha)
+    {
+        if (image == null)
+        {
+            return;
+        }
+
+        image.texture = texture;
+        image.uvRect = new Rect(0f, 0f, 1f, 1f);
+        image.color = new Color(1f, 1f, 1f, Mathf.Clamp01(alpha));
+    }
+
+    private static IEnumerator RotateSpeedLines(float speedLineASpeed, float speedLineBSpeed)
+    {
+        while (activeSpeedLineOverlay != null && activeSpeedLineOverlay.activeSelf)
+        {
+            float deltaTime = Time.deltaTime;
+
+            if (activeSpeedLineATransform != null)
+            {
+                activeSpeedLineATransform.Rotate(0f, 0f, speedLineASpeed * deltaTime);
+            }
+
+            if (activeSpeedLineBTransform != null)
+            {
+                activeSpeedLineBTransform.Rotate(0f, 0f, speedLineBSpeed * deltaTime);
+            }
+
+            yield return null;
+        }
+
+        activeSpeedLineRotationRoutine = null;
+    }
+
+    private static IEnumerator FadeSpeedLines(float startAlpha, float targetAlpha, float seconds, bool disableOnComplete)
+    {
+        if (seconds <= 0f)
+        {
+            SetSpeedLineAlpha(targetAlpha);
+            CompleteSpeedLineFade(disableOnComplete);
+            yield break;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < seconds)
+        {
+            float t = Mathf.Clamp01(elapsed / seconds);
+            SetSpeedLineAlpha(Mathf.Lerp(startAlpha, targetAlpha, t));
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        SetSpeedLineAlpha(targetAlpha);
+        CompleteSpeedLineFade(disableOnComplete);
+    }
+
+    private static void CompleteSpeedLineFade(bool disableOnComplete)
+    {
+        if (disableOnComplete)
+        {
+            if (activeSpeedLineRotationRoutine != null && activeSpeedLineHost != null)
+            {
+                activeSpeedLineHost.StopCoroutine(activeSpeedLineRotationRoutine);
+                activeSpeedLineRotationRoutine = null;
+            }
+
+            if (activeSpeedLineOverlay != null)
+            {
+                activeSpeedLineOverlay.SetActive(false);
+            }
+
+            activeSpeedLineHost = null;
+        }
+
+        activeSpeedLineFadeRoutine = null;
+    }
+
+    private static void SetSpeedLineAlpha(float alpha)
+    {
+        alpha = Mathf.Clamp01(alpha);
+        SetSpeedLineAlpha(activeSpeedLineA, alpha);
+        SetSpeedLineAlpha(activeSpeedLineB, alpha);
+    }
+
+    private static void SetSpeedLineAlpha(RawImage image, float alpha)
+    {
+        if (image == null)
+        {
+            return;
+        }
+
+        Color color = image.color;
+        color.a = alpha;
+        image.color = color;
+    }
+
+    private static float GetSpeedLineAlpha(RawImage image)
+    {
+        return image != null ? image.color.a : 0f;
+    }
+
+    private static void StopSpeedLineCoroutines()
+    {
+        if (activeSpeedLineRotationRoutine != null && activeSpeedLineHost != null)
+        {
+            activeSpeedLineHost.StopCoroutine(activeSpeedLineRotationRoutine);
+        }
+
+        if (activeSpeedLineFadeRoutine != null && activeSpeedLineHost != null)
+        {
+            activeSpeedLineHost.StopCoroutine(activeSpeedLineFadeRoutine);
+        }
+
+        activeSpeedLineRotationRoutine = null;
+        activeSpeedLineFadeRoutine = null;
     }
 
     private static Canvas ResolveCanvas()

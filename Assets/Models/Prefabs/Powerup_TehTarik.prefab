@@ -55,6 +55,9 @@ MonoBehaviour:
   speedMultiplier: 1.6
   duration: 5
   shakeMagnitude: 0.05
+  speedLinesTexture: {fileID: 0}
+  speedLineARotationSpeed: 12
+  speedLineBRotationSpeed: -9
 --- !u!212 &2878101118600294152
 SpriteRenderer:
   serializedVersion: 2
