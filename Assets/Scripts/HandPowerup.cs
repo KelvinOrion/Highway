@@ -6,7 +6,9 @@ using UnityEngine;
 public sealed class HandPowerup : PowerupBase
 {
     private const string VehicleTag = "Vehicle";
+    private const string CountdownAudioObjectName = "HandCountdownTickAudio";
     private const float PlayerFlashDuration = 0.2f;
+    private const float CountdownTickPlaybackSeconds = 0.5f;
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorId = Shader.PropertyToID("_Color");
 
@@ -16,6 +18,9 @@ public sealed class HandPowerup : PowerupBase
     private static readonly Dictionary<Rigidbody, StoredVelocity> FrozenVehicles = new();
     private static Coroutine activeRoutine;
     private static MonoBehaviour activeHost;
+    private static Coroutine countdownStopRoutine;
+    private static MonoBehaviour countdownStopHost;
+    private static AudioSource countdownAudioSource;
 
     public static bool IsActive { get; private set; }
 
@@ -26,7 +31,7 @@ public sealed class HandPowerup : PowerupBase
             activeHost.StopCoroutine(activeRoutine);
         }
 
-        RestoreFrozenVehicles();
+        CleanupEffect();
         IsActive = false;
         activeRoutine = null;
         activeHost = null;
@@ -41,17 +46,18 @@ public sealed class HandPowerup : PowerupBase
             return;
         }
 
-        CacheAndFreezeActiveVehicles();
-        manager.StartCoroutine(FlashPlayer(player, PlayerFlashDuration));
-
         if (activeRoutine != null && activeHost != null)
         {
             activeHost.StopCoroutine(activeRoutine);
+            CleanupEffect();
         }
+
+        CacheAndFreezeActiveVehicles();
+        manager.StartCoroutine(FlashPlayer(player, PlayerFlashDuration));
 
         activeHost = manager;
         IsActive = true;
-        activeRoutine = manager.StartCoroutine(FreezeForDuration(Mathf.Max(0f, duration), player, countdownTick));
+        activeRoutine = manager.StartCoroutine(FreezeForDuration(Mathf.Max(0f, duration), player, countdownTick, manager));
     }
 
     public static void FreezeVehicle(Rigidbody vehicle)
@@ -88,7 +94,7 @@ public sealed class HandPowerup : PowerupBase
         }
     }
 
-    private static IEnumerator FreezeForDuration(float seconds, GameObject player, AudioClip countdownTick)
+    private static IEnumerator FreezeForDuration(float seconds, GameObject player, AudioClip countdownTick, MonoBehaviour host)
     {
         int tickCount = seconds >= 3f ? 3 : Mathf.FloorToInt(seconds);
         float preTickDelay = Mathf.Max(0f, seconds - tickCount);
@@ -100,32 +106,104 @@ public sealed class HandPowerup : PowerupBase
 
         for (int i = 0; i < tickCount; i++)
         {
-            PlayCountdownTick(player, countdownTick);
+            PlayCountdownTick(player, countdownTick, host);
             yield return new WaitForSeconds(1f);
         }
 
-        RestoreFrozenVehicles();
+        CleanupEffect();
         IsActive = false;
         activeRoutine = null;
         activeHost = null;
     }
 
-    private static void PlayCountdownTick(GameObject player, AudioClip countdownTick)
+    private static void PlayCountdownTick(GameObject player, AudioClip countdownTick, MonoBehaviour host)
     {
-        if (player == null || countdownTick == null)
+        if (player == null || countdownTick == null || host == null)
         {
             return;
         }
 
-        AudioSource source = player.GetComponent<AudioSource>();
+        AudioSource source = ResolveCountdownSource(player);
         if (source == null)
         {
-            source = player.AddComponent<AudioSource>();
-            source.playOnAwake = false;
-            source.spatialBlend = 0f;
+            return;
         }
 
-        source.PlayOneShot(countdownTick);
+        StopCountdownAudio();
+
+        source.clip = countdownTick;
+        source.loop = false;
+        source.Play();
+
+        countdownAudioSource = source;
+        countdownStopHost = host;
+        countdownStopRoutine = host.StartCoroutine(StopCountdownTickAfterDelay(source, CountdownTickPlaybackSeconds));
+    }
+
+    private static IEnumerator StopCountdownTickAfterDelay(AudioSource source, float seconds)
+    {
+        if (seconds > 0f)
+        {
+            yield return new WaitForSeconds(seconds);
+        }
+
+        if (source != null)
+        {
+            source.Stop();
+        }
+
+        if (countdownAudioSource == source)
+        {
+            countdownAudioSource = null;
+            countdownStopRoutine = null;
+            countdownStopHost = null;
+        }
+    }
+
+    private static AudioSource ResolveCountdownSource(GameObject player)
+    {
+        if (countdownAudioSource != null)
+        {
+            return countdownAudioSource;
+        }
+
+        Transform audioTransform = player.transform.Find(CountdownAudioObjectName);
+        AudioSource source = audioTransform != null ? audioTransform.GetComponent<AudioSource>() : null;
+        if (source == null)
+        {
+            GameObject audioObject = new(CountdownAudioObjectName);
+            audioObject.transform.SetParent(player.transform, false);
+            source = audioObject.AddComponent<AudioSource>();
+        }
+
+        source.playOnAwake = false;
+        source.loop = false;
+        source.spatialBlend = 0f;
+        countdownAudioSource = source;
+        return source;
+    }
+
+    private static void CleanupEffect()
+    {
+        StopCountdownAudio();
+        RestoreFrozenVehicles();
+    }
+
+    private static void StopCountdownAudio()
+    {
+        if (countdownStopRoutine != null && countdownStopHost != null)
+        {
+            countdownStopHost.StopCoroutine(countdownStopRoutine);
+        }
+
+        if (countdownAudioSource != null)
+        {
+            countdownAudioSource.Stop();
+        }
+
+        countdownStopRoutine = null;
+        countdownStopHost = null;
+        countdownAudioSource = null;
     }
 
     private static void RestoreFrozenVehicles()

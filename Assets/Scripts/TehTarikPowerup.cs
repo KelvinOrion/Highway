@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 public sealed class TehTarikPowerup : PowerupBase
@@ -8,21 +9,20 @@ public sealed class TehTarikPowerup : PowerupBase
     private const float CameraShakeDuration = 0.3f;
     private const float CameraZoomMultiplier = 0.85f;
     private const float CameraZoomDuration = 0.3f;
-    private const float SpeedLinesCameraDistance = 1f;
-    private const float SpeedLinesDestroyDelay = 0.15f;
+    private const float SpeedLinesAlpha = 0.6f;
 
     [SerializeField] private float speedMultiplier = 1.6f;
     [SerializeField] private float duration = 5f;
     [SerializeField] private float shakeMagnitude = 0.05f;
-    [SerializeField] private ParticleSystem speedLinesPrefab;
+    [SerializeField] private Texture speedLinesTexture;
 
     private static Coroutine activeRoutine;
     private static Coroutine activeZoomRoutine;
     private static GameManager activeManager;
     private static MonoBehaviour activeZoomHost;
     private static Camera activeCamera;
-    private static ParticleSystem activeSpeedLines;
-    private static GameObject activeSpeedLinesObject;
+    private static RawImage activeSpeedLinesOverlay;
+    private static Texture2D placeholderSpeedLinesTexture;
     private static float originalMoveDuration;
     private static float originalCameraZoom;
     private static bool originalCameraWasOrthographic;
@@ -39,7 +39,7 @@ public sealed class TehTarikPowerup : PowerupBase
 
         StopActiveZoomRoutine();
         RestoreCameraZoomImmediate();
-        StopSpeedLines(clearParticles: true);
+        HideSpeedLines();
 
         activeRoutine = null;
         activeManager = null;
@@ -74,7 +74,7 @@ public sealed class TehTarikPowerup : PowerupBase
         float multiplier = Mathf.Max(MinSpeedMultiplier, speedMultiplier);
         manager.SetMoveDuration(originalMoveDuration / multiplier);
         manager.PlayCameraShake(CameraShakeDuration, shakeMagnitude);
-        StartSpeedLines(Camera.main, speedLinesPrefab);
+        ShowSpeedLines(speedLinesTexture);
         StartCameraZoom(manager, Camera.main);
 
         activeRoutine = manager.StartCoroutine(RestoreAfterDuration(manager, Mathf.Max(0f, duration), originalMoveDuration));
@@ -92,7 +92,7 @@ public sealed class TehTarikPowerup : PowerupBase
             manager.SetMoveDuration(restoreMoveDuration);
         }
 
-        StopSpeedLines(clearParticles: false);
+        HideSpeedLines();
         StartCameraZoomRestore(manager);
 
         if (activeManager == manager)
@@ -104,53 +104,115 @@ public sealed class TehTarikPowerup : PowerupBase
         }
     }
 
-    private static void StartSpeedLines(Camera camera, ParticleSystem prefab)
+    private static void ShowSpeedLines(Texture texture)
     {
-        if (camera == null)
+        RawImage overlay = ResolveSpeedLinesOverlay();
+        if (overlay == null)
         {
             return;
         }
 
-        StopSpeedLines(clearParticles: true);
-
-        if (prefab != null)
-        {
-            activeSpeedLines = Instantiate(prefab, camera.transform);
-            activeSpeedLinesObject = activeSpeedLines.gameObject;
-            activeSpeedLinesObject.name = "TehTarik_SpeedLines";
-            activeSpeedLines.transform.localPosition = Vector3.forward * SpeedLinesCameraDistance;
-            activeSpeedLines.transform.localRotation = Quaternion.identity;
-            activeSpeedLines.transform.localScale = Vector3.one;
-            activeSpeedLines.Play(true);
-            return;
-        }
-
-        activeSpeedLines = TehTarikSpeedLinesEffect.Create(camera, SpeedLinesCameraDistance);
-        activeSpeedLinesObject = activeSpeedLines != null ? activeSpeedLines.gameObject : null;
+        overlay.texture = texture != null ? texture : GetPlaceholderSpeedLinesTexture();
+        overlay.color = new Color(1f, 1f, 1f, SpeedLinesAlpha);
+        overlay.gameObject.SetActive(true);
+        overlay.transform.SetAsLastSibling();
     }
 
-    private static void StopSpeedLines(bool clearParticles)
+    private static void HideSpeedLines()
     {
-        if (activeSpeedLinesObject != null &&
-            activeSpeedLinesObject.TryGetComponent(out TehTarikSpeedLinesEffect speedLinesEffect))
+        if (activeSpeedLinesOverlay != null)
         {
-            speedLinesEffect.StopEmitting();
+            activeSpeedLinesOverlay.gameObject.SetActive(false);
+        }
+    }
+
+    private static RawImage ResolveSpeedLinesOverlay()
+    {
+        if (activeSpeedLinesOverlay != null)
+        {
+            return activeSpeedLinesOverlay;
         }
 
-        if (activeSpeedLines != null)
+        Canvas canvas = ResolveCanvas();
+        if (canvas == null)
         {
-            activeSpeedLines.Stop(true, clearParticles
-                ? ParticleSystemStopBehavior.StopEmittingAndClear
-                : ParticleSystemStopBehavior.StopEmitting);
+            return null;
         }
 
-        if (activeSpeedLinesObject != null)
+        GameObject overlayObject = new("TehTarik_SpeedLinesOverlay", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
+        overlayObject.transform.SetParent(canvas.transform, false);
+
+        RectTransform rectTransform = overlayObject.GetComponent<RectTransform>();
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        rectTransform.offsetMin = Vector2.zero;
+        rectTransform.offsetMax = Vector2.zero;
+
+        activeSpeedLinesOverlay = overlayObject.GetComponent<RawImage>();
+        activeSpeedLinesOverlay.raycastTarget = false;
+        activeSpeedLinesOverlay.gameObject.SetActive(false);
+        return activeSpeedLinesOverlay;
+    }
+
+    private static Canvas ResolveCanvas()
+    {
+        Canvas[] canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (Canvas canvas in canvases)
         {
-            Destroy(activeSpeedLinesObject, clearParticles ? 0f : SpeedLinesDestroyDelay);
+            if (canvas != null && canvas.isActiveAndEnabled && canvas.renderMode != RenderMode.WorldSpace)
+            {
+                return canvas;
+            }
         }
 
-        activeSpeedLines = null;
-        activeSpeedLinesObject = null;
+        foreach (Canvas canvas in canvases)
+        {
+            if (canvas != null && canvas.renderMode != RenderMode.WorldSpace)
+            {
+                return canvas;
+            }
+        }
+
+        foreach (Canvas canvas in canvases)
+        {
+            if (canvas != null && canvas.isActiveAndEnabled)
+            {
+                return canvas;
+            }
+        }
+
+        foreach (Canvas canvas in canvases)
+        {
+            if (canvas != null)
+            {
+                return canvas;
+            }
+        }
+
+        GameObject canvasObject = new("TehTarikSpeedLinesCanvas", typeof(Canvas), typeof(CanvasScaler));
+
+        Canvas createdCanvas = canvasObject.GetComponent<Canvas>();
+        createdCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        createdCanvas.sortingOrder = short.MaxValue;
+        return createdCanvas;
+    }
+
+    private static Texture2D GetPlaceholderSpeedLinesTexture()
+    {
+        if (placeholderSpeedLinesTexture != null)
+        {
+            return placeholderSpeedLinesTexture;
+        }
+
+        placeholderSpeedLinesTexture = new Texture2D(1, 1)
+        {
+            name = "Teh Tarik Speed Lines Placeholder",
+            hideFlags = HideFlags.DontSave,
+            filterMode = FilterMode.Point
+        };
+        placeholderSpeedLinesTexture.SetPixel(0, 0, Color.white);
+        placeholderSpeedLinesTexture.Apply();
+        return placeholderSpeedLinesTexture;
     }
 
     private static void StartCameraZoom(GameManager manager, Camera camera)
@@ -282,149 +344,5 @@ public sealed class TehTarikPowerup : PowerupBase
         activeCamera = null;
         originalCameraZoom = 0f;
         hasOriginalCameraZoom = false;
-    }
-}
-
-internal sealed class TehTarikSpeedLinesEffect : MonoBehaviour
-{
-    private const int MaxParticles = 256;
-    private const int LinesPerSecond = 140;
-    private const float LineLifetime = 0.1f;
-    private const float LineSpeed = 9f;
-    private const float LineSpawnRadius = 0.05f;
-    private const float LineThickness = 0.035f;
-    private const float RendererVelocityScale = 0.08f;
-    private const float RendererLengthScale = 2.6f;
-    private static readonly Color LineColor = new(1f, 0.92f, 0.72f, 0.85f);
-
-    private ParticleSystem particles;
-    private Material lineMaterial;
-    private float emissionAccumulator;
-
-    public static ParticleSystem Create(Camera camera, float cameraDistance)
-    {
-        if (camera == null)
-        {
-            return null;
-        }
-
-        GameObject effectObject = new("TehTarik_SpeedLines");
-        effectObject.transform.SetParent(camera.transform, false);
-        effectObject.transform.localPosition = Vector3.forward * Mathf.Max(camera.nearClipPlane + 0.1f, cameraDistance);
-        effectObject.transform.localRotation = Quaternion.identity;
-        effectObject.transform.localScale = Vector3.one;
-
-        ParticleSystem particleSystem = effectObject.AddComponent<ParticleSystem>();
-        TehTarikSpeedLinesEffect effect = effectObject.AddComponent<TehTarikSpeedLinesEffect>();
-        effect.Configure(particleSystem);
-        return particleSystem;
-    }
-
-    private void Update()
-    {
-        if (!enabled || particles == null)
-        {
-            return;
-        }
-
-        emissionAccumulator += LinesPerSecond * Time.deltaTime;
-        int emitCount = Mathf.FloorToInt(emissionAccumulator);
-        if (emitCount <= 0)
-        {
-            return;
-        }
-
-        emissionAccumulator -= emitCount;
-        for (int i = 0; i < emitCount; i++)
-        {
-            EmitLine();
-        }
-    }
-
-    private void OnDestroy()
-    {
-        if (lineMaterial != null)
-        {
-            Destroy(lineMaterial);
-            lineMaterial = null;
-        }
-    }
-
-    private void Configure(ParticleSystem particleSystem)
-    {
-        particles = particleSystem;
-
-        ParticleSystem.MainModule main = particles.main;
-        main.duration = 1f;
-        main.loop = true;
-        main.playOnAwake = false;
-        main.startLifetime = LineLifetime;
-        main.startSpeed = 0f;
-        main.startSize = LineThickness;
-        main.startColor = LineColor;
-        main.gravityModifier = 0f;
-        main.maxParticles = MaxParticles;
-        main.simulationSpace = ParticleSystemSimulationSpace.Local;
-        main.scalingMode = ParticleSystemScalingMode.Local;
-
-        ParticleSystem.EmissionModule emission = particles.emission;
-        emission.enabled = false;
-
-        ParticleSystem.ShapeModule shape = particles.shape;
-        shape.enabled = false;
-
-        ParticleSystemRenderer particleRenderer = particles.GetComponent<ParticleSystemRenderer>();
-        particleRenderer.renderMode = ParticleSystemRenderMode.Stretch;
-        particleRenderer.velocityScale = RendererVelocityScale;
-        particleRenderer.lengthScale = RendererLengthScale;
-        particleRenderer.sortingOrder = short.MaxValue;
-
-        lineMaterial = CreateLineMaterial();
-        if (lineMaterial != null)
-        {
-            particleRenderer.material = lineMaterial;
-        }
-
-        particles.Play();
-    }
-
-    private void EmitLine()
-    {
-        float angle = Random.Range(0f, Mathf.PI * 2f);
-        Vector3 direction = new(Mathf.Cos(angle), Mathf.Sin(angle), 0f);
-
-        ParticleSystem.EmitParams emitParams = new()
-        {
-            position = direction * LineSpawnRadius,
-            velocity = direction * LineSpeed,
-            startLifetime = LineLifetime,
-            startSize = LineThickness,
-            startColor = LineColor
-        };
-
-        particles.Emit(emitParams, 1);
-    }
-
-    public void StopEmitting()
-    {
-        enabled = false;
-    }
-
-    private static Material CreateLineMaterial()
-    {
-        Shader shader = Shader.Find("Universal Render Pipeline/Particles/Unlit") ??
-                        Shader.Find("Particles/Standard Unlit") ??
-                        Shader.Find("Sprites/Default");
-
-        if (shader == null)
-        {
-            return null;
-        }
-
-        return new Material(shader)
-        {
-            name = "Teh Tarik Speed Lines",
-            hideFlags = HideFlags.DontSave
-        };
     }
 }

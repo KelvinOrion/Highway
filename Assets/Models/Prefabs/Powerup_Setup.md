@@ -16,8 +16,8 @@ Teh Tarik:
 - `Speed Multiplier`: default `1.6`.
 - `Duration`: default `5`.
 - `Shake Magnitude`: default `0.05` for the existing camera shake hook.
-- `Speed Lines Prefab`: optional ParticleSystem slot. Leave empty to use the runtime cream radial speed lines.
+- `Speed Lines Texture`: optional Texture slot for the full-screen RawImage overlay. Leave empty to use the low-alpha white placeholder.
 
 Hand:
 - `Duration`: default `5`.
-- `Countdown Tick`: optional AudioClip slot for the final three-second warning ticks.
+- `Countdown Tick`: optional AudioClip slot for the final three-second warning ticks. Playback is cut to `0.5` seconds per tick.
