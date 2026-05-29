@@ -2,7 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
+[RequireComponent(typeof(MakController))]
 public class GameManager : MonoBehaviour
 {
     private const int TargetFrameRate = 60;
@@ -17,9 +19,6 @@ public class GameManager : MonoBehaviour
     private const float GrassHeight = 0.2f;
     private const float DefaultHopAnimationDuration = 0.3f;
     private const float MinMoveDuration = 0.01f;
-    private const float MinRoadProbability = 0.3f;
-    private const float MaxRoadProbability = 0.5f;
-    private const float RoadProbabilityMaxDistance = 250f;
     private const float RiverDeathHeightOffset = 0.2f;
     private const float RiverDeathForwardOffset = 0.5f;
     private const int FallbackDeathDataVariantCount = 5;
@@ -30,6 +29,8 @@ public class GameManager : MonoBehaviour
     private const float MilestoneAnchorY = 0.72f;
     private const float MilestoneWidth = 520f;
     private const float MilestoneHeight = 110f;
+    private const float MakDeathFlashDuration = 0.2f;
+    private const float MakDeathFlashAlpha = 0.85f;
 
     [System.Serializable]
     private sealed class TrafficTier
@@ -125,12 +126,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Vector3 cameraOffset = new(3f, 9f, -5f);
 
     [Header("Traffic tuning")]
-    [SerializeField] private List<TrafficTier> trafficTiers = new()
-    {
-        new(0, 0.30f, 1f, 2.75f, 1, 2, 2f, 0.2f, 1.3f),
-        new(40, 0.38f, 2f, 4.75f, 1, 3, 1f, 0.15f, 0.95f),
-        new(90, 0.50f, 3.25f, 6f, 2, 3, 0.8f, 0.12f, 0.75f)
-    };
+    [SerializeField] private List<TrafficTier> trafficTiers;
     [SerializeField] private float trafficWrapX = 15f;
     [SerializeField] private int leftEdgeThreshold = -4;
     [Range(0f, 0.4f)]
@@ -169,6 +165,7 @@ public class GameManager : MonoBehaviour
     private Rigidbody characterBody;
     private Animator characterAnimator;
     private float hopAnimationDuration = DefaultHopAnimationDuration;
+    private float defaultMoveDuration;
     private GameState gameState;
     private Vector2Int characterPos;
     private int score;
@@ -176,14 +173,25 @@ public class GameManager : MonoBehaviour
     private int spawnLocation;
     private float fixedCameraY;
     private Vector3 cameraBasePos;
+    private Vector3 cameraShakeOffset;
     private Coroutine deathSequenceRoutine;
+    private Coroutine cameraShakeRoutine;
     private Coroutine milestoneRoutine;
+    private Coroutine makDeathSequenceRoutine;
+    private Image makDeathFlashImage;
+    private GameObject makDeathFlashCanvasObject;
     private readonly HashSet<int> shownMilestones = new();
+    private MakController makController;
+
+    public float MoveDuration => moveDuration;
+    public int PlayerRow => characterPos.y;
+    public int PlayerStartColumn => StartX;
+    public bool IsPlayerDead => gameState == GameState.Dead;
 
     private void Awake()
     {
-        ConfigureDefaultTrafficTiers();
         ValidateTrafficTiers();
+        defaultMoveDuration = moveDuration;
         Application.targetFrameRate = TargetFrameRate;
         QualitySettings.vSyncCount = 0;
 
@@ -195,6 +203,7 @@ public class GameManager : MonoBehaviour
             fixedCameraY = character.position.y + cameraOffset.y;
         }
 
+        ResolveMakController();
         NewLevel();
     }
 
@@ -220,12 +229,23 @@ public class GameManager : MonoBehaviour
     // Resets runtime state and rebuilds the starting terrain rows.
     private void NewLevel()
     {
+        Time.timeScale = 1f;
+
         if (deathSequenceRoutine != null)
         {
             StopCoroutine(deathSequenceRoutine);
             deathSequenceRoutine = null;
         }
 
+        if (makDeathSequenceRoutine != null)
+        {
+            StopCoroutine(makDeathSequenceRoutine);
+            makDeathSequenceRoutine = null;
+        }
+
+        ClearMakDeathFlash();
+        makController?.ResetForNewGame();
+        ResetPowerups();
         gameState = GameState.Ready;
         shownMilestones.Clear();
         HideMilestoneImmediate();
@@ -237,6 +257,14 @@ public class GameManager : MonoBehaviour
         ClearTerrain();
         SpawnInitialTerrain();
         ResetCameraToPlayer();
+    }
+
+    private void ResetPowerups()
+    {
+        TehTarikPowerup.ResetRuntimeState();
+        HandPowerup.ResetRuntimeState();
+        PowerupBase.ClearLivePowerups();
+        SetMoveDuration(defaultMoveDuration);
     }
 
     private void ResetCharacter()
@@ -397,6 +425,12 @@ public class GameManager : MonoBehaviour
             character.localRotation = Quaternion.Euler(0f, DirectionToYaw(direction), 0f);
         }
 
+        if (makController != null && makController.CheckPlayerMoveForCatch(characterPos.y))
+        {
+            SetCharacterPosition(new Vector3(characterPos.x, GetTerrainHeight(characterPos), characterPos.y));
+            return;
+        }
+
         PlayHopAnimation();
         StartCoroutine(MoveCharacter());
 
@@ -465,8 +499,8 @@ public class GameManager : MonoBehaviour
         }
 
         Vector3 targetPos = GetCameraTargetPosition(character.position);
-        cam.transform.position = targetPos;
         cameraBasePos = targetPos;
+        cam.transform.position = targetPos + cameraShakeOffset;
     }
 
     // Called by InputRouter. Replaces all legacy Input polling.
@@ -486,6 +520,14 @@ public class GameManager : MonoBehaviour
 
     private void ResetCameraToPlayer()
     {
+        if (cameraShakeRoutine != null)
+        {
+            StopCoroutine(cameraShakeRoutine);
+            cameraShakeRoutine = null;
+        }
+
+        cameraShakeOffset = Vector3.zero;
+
         Camera cam = Camera.main;
         if (cam == null || character == null)
         {
@@ -524,9 +566,33 @@ public class GameManager : MonoBehaviour
         HideMilestoneImmediate();
     }
 
+    public void PlayerCaughtByMak()
+    {
+        if (gameState == GameState.Dead)
+        {
+            return;
+        }
+
+        gameState = GameState.Dead;
+
+        if (deathSequenceRoutine != null)
+        {
+            StopCoroutine(deathSequenceRoutine);
+            deathSequenceRoutine = null;
+        }
+
+        if (makDeathSequenceRoutine != null)
+        {
+            StopCoroutine(makDeathSequenceRoutine);
+        }
+
+        makDeathSequenceRoutine = StartCoroutine(MakDeathSequence());
+        HideMilestoneImmediate();
+    }
+
     private IEnumerator PlayerDeathSequence()
     {
-        StartCoroutine(ScreenShake());
+        PlayCameraShake(shakeDuration, shakeMagnitude);
 
         SetScoreUiVisible(false);
 
@@ -539,6 +605,17 @@ public class GameManager : MonoBehaviour
         deathSequenceRoutine = null;
     }
 
+    private IEnumerator MakDeathSequence()
+    {
+        PlayCameraShake(shakeDuration, shakeMagnitude);
+        SetScoreUiVisible(false);
+
+        yield return FlashMakDeathScreen();
+
+        OnPlayerDeath(CreateMakDeathData());
+        makDeathSequenceRoutine = null;
+    }
+
     public void AddCoin()
     {
         coinsCollected++;
@@ -547,6 +624,39 @@ public class GameManager : MonoBehaviour
     public void AddCoins(int amount = 1)
     {
         coinsCollected = Mathf.Max(0, coinsCollected + amount);
+    }
+
+    public void SetMoveDuration(float duration)
+    {
+        moveDuration = Mathf.Max(MinMoveDuration, duration);
+    }
+
+    public Vector3 GetCenterColumnWorldPosition(int row)
+    {
+        return new Vector3(StartX, GetTerrainHeight(new Vector2Int(StartX, row)), row);
+    }
+
+    public float GetTrafficReactionTimeScaleForCurrentScore()
+    {
+        TrafficTier startingTier = GetTrafficTier(0);
+        TrafficTier currentTier = GetTrafficTier(score);
+
+        if (startingTier == null || currentTier == null || startingTier.TargetReactionTime <= 0f || currentTier.TargetReactionTime <= 0f)
+        {
+            return 1f;
+        }
+
+        return Mathf.Max(0.01f, currentTier.TargetReactionTime / startingTier.TargetReactionTime);
+    }
+
+    public void PlayCameraShake(float duration, float magnitude)
+    {
+        if (cameraShakeRoutine != null)
+        {
+            StopCoroutine(cameraShakeRoutine);
+        }
+
+        cameraShakeRoutine = StartCoroutine(ScreenShake(Mathf.Max(0f, duration), Mathf.Abs(magnitude)));
     }
 
     public void OnPlayerDeath(DeathData data)
@@ -563,26 +673,108 @@ public class GameManager : MonoBehaviour
         screen.Show(data != null ? data : ChooseDeathData(), score, coinsCollected);
     }
 
-    private IEnumerator ScreenShake()
+    private IEnumerator ScreenShake(float duration, float magnitude)
     {
         Camera cam = Camera.main;
         if (cam == null)
         {
+            cameraShakeRoutine = null;
             yield break;
         }
 
         float elapsed = 0f;
 
-        while (elapsed < shakeDuration)
+        while (elapsed < duration)
         {
-            Vector3 offset = Random.insideUnitSphere * shakeMagnitude;
-            cam.transform.position = cameraBasePos + new Vector3(offset.x, offset.y, 0f);
+            Vector3 offset = Random.insideUnitSphere * magnitude;
+            cameraShakeOffset = new Vector3(offset.x, offset.y, 0f);
+            cam.transform.position = cameraBasePos + cameraShakeOffset;
 
             elapsed += Time.unscaledDeltaTime;
             yield return null;
         }
 
+        cameraShakeOffset = Vector3.zero;
         cam.transform.position = cameraBasePos;
+        cameraShakeRoutine = null;
+    }
+
+    private IEnumerator FlashMakDeathScreen()
+    {
+        Image flashImage = ResolveMakDeathFlashImage();
+        if (flashImage == null)
+        {
+            if (MakDeathFlashDuration > 0f)
+            {
+                yield return new WaitForSecondsRealtime(MakDeathFlashDuration);
+            }
+
+            yield break;
+        }
+
+        flashImage.gameObject.SetActive(true);
+        flashImage.transform.SetAsLastSibling();
+        flashImage.color = new Color(1f, 0f, 0f, MakDeathFlashAlpha);
+
+        if (MakDeathFlashDuration > 0f)
+        {
+            yield return new WaitForSecondsRealtime(MakDeathFlashDuration);
+        }
+
+        ClearMakDeathFlash();
+    }
+
+    private Image ResolveMakDeathFlashImage()
+    {
+        if (makDeathFlashImage != null)
+        {
+            return makDeathFlashImage;
+        }
+
+        Canvas targetCanvas = ResolveDeathScreen()?.GetComponentInParent<Canvas>();
+        if (targetCanvas == null)
+        {
+            targetCanvas = FindFirstObjectByType<Canvas>(FindObjectsInactive.Include);
+        }
+
+        if (targetCanvas == null)
+        {
+            GameObject canvasObject = new("MakDeathFlashCanvas", typeof(Canvas), typeof(CanvasScaler));
+            makDeathFlashCanvasObject = canvasObject;
+            targetCanvas = canvasObject.GetComponent<Canvas>();
+            targetCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            targetCanvas.sortingOrder = short.MaxValue;
+        }
+
+        GameObject flashObject = new("MakDeathFlash", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        flashObject.transform.SetParent(targetCanvas.transform, false);
+        flashObject.transform.SetAsLastSibling();
+
+        RectTransform rectTransform = flashObject.GetComponent<RectTransform>();
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        rectTransform.offsetMin = Vector2.zero;
+        rectTransform.offsetMax = Vector2.zero;
+
+        makDeathFlashImage = flashObject.GetComponent<Image>();
+        makDeathFlashImage.raycastTarget = false;
+        makDeathFlashImage.color = new Color(1f, 0f, 0f, 0f);
+        return makDeathFlashImage;
+    }
+
+    private void ClearMakDeathFlash()
+    {
+        if (makDeathFlashImage != null)
+        {
+            Destroy(makDeathFlashImage.gameObject);
+            makDeathFlashImage = null;
+        }
+
+        if (makDeathFlashCanvasObject != null)
+        {
+            Destroy(makDeathFlashCanvasObject);
+            makDeathFlashCanvasObject = null;
+        }
     }
 
     private void SetScoreUiVisible(bool visible)
@@ -596,21 +788,6 @@ public class GameManager : MonoBehaviour
         {
             scoreText.gameObject.SetActive(visible);
         }
-    }
-
-    private void ConfigureDefaultTrafficTiers()
-    {
-        if (trafficTiers != null && trafficTiers.Count > 0)
-        {
-            return;
-        }
-
-        trafficTiers = new List<TrafficTier>
-        {
-            new(0, 0.30f, 1f, 2.75f, 1, 2, 2f, 0.2f, 1.3f),
-            new(40, 0.38f, 2f, 4.75f, 1, 3, 1f, 0.15f, 0.95f),
-            new(90, 0.50f, 3.25f, 6f, 2, 3, 0.8f, 0.12f, 0.75f)
-        };
     }
 
     private void ValidateTrafficTiers()
@@ -673,24 +850,11 @@ public class GameManager : MonoBehaviour
     private float GetRoadProbability(int row)
     {
         TrafficTier tier = GetTrafficTier(row);
-        if (tier != null)
-        {
-            return tier.RoadProbability;
-        }
-
-        return Mathf.Lerp(MinRoadProbability, MaxRoadProbability, row / RoadProbabilityMaxDistance);
+        return tier != null ? tier.RoadProbability : 0f;
     }
 
     private Road.SpawnConfig BuildRoadConfig(TrafficTier tier)
     {
-        float fallbackProgress = spawnLocation / RoadProbabilityMaxDistance;
-        float minSpeed = tier != null
-            ? tier.MinSpeed
-            : Mathf.Lerp(1f, 3f, fallbackProgress);
-        float maxSpeed = tier != null
-            ? tier.MaxSpeed
-            : Mathf.Lerp(3f, 8f, fallbackProgress);
-
         float positiveDirectionChance = DefaultPositiveDirectionChance;
         if (characterPos.x <= leftEdgeThreshold)
         {
@@ -699,13 +863,13 @@ public class GameManager : MonoBehaviour
 
         return new Road.SpawnConfig
         {
-            MinSpeed = Mathf.Max(MinTrafficSpeed, Mathf.Min(minSpeed, maxSpeed)),
-            MaxSpeed = Mathf.Max(minSpeed, maxSpeed),
+            MinSpeed = tier != null ? Mathf.Max(MinTrafficSpeed, Mathf.Min(tier.MinSpeed, tier.MaxSpeed)) : 0f,
+            MaxSpeed = tier != null ? Mathf.Max(tier.MinSpeed, tier.MaxSpeed) : 0f,
             MinVehicleCount = tier != null ? tier.MinVehicleCount : 0,
-            MaxVehicleCount = tier != null ? tier.MaxVehicleCount : 3,
-            TargetReactionTime = tier != null ? tier.TargetReactionTime : 1f,
-            ReactionTimeJitter = tier != null ? tier.ReactionTimeJitter : 0.2f,
-            MinGuaranteedSafeWindow = tier != null ? tier.GuaranteedSafeWindow : 1f,
+            MaxVehicleCount = tier != null ? tier.MaxVehicleCount : 0,
+            TargetReactionTime = tier != null ? tier.TargetReactionTime : 0f,
+            ReactionTimeJitter = tier != null ? tier.ReactionTimeJitter : 0f,
+            MinGuaranteedSafeWindow = tier != null ? tier.GuaranteedSafeWindow : 0f,
             PositiveDirectionChance = Mathf.Clamp01(positiveDirectionChance),
             WrapX = trafficWrapX
         };
@@ -817,6 +981,21 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    private void ResolveMakController()
+    {
+        if (makController == null)
+        {
+            makController = GetComponent<MakController>();
+        }
+
+        if (makController == null)
+        {
+            makController = gameObject.AddComponent<MakController>();
+        }
+
+        makController.Init(this);
+    }
+
     private DeathScreen ResolveDeathScreen()
     {
         if (deathScreen != null)
@@ -846,6 +1025,17 @@ public class GameManager : MonoBehaviour
         }
 
         return CreateFallbackDeathData();
+    }
+
+    private static DeathData CreateMakDeathData()
+    {
+        return DeathData.CreateRuntime(
+            "Mak",
+            "Mak Dah Sampai,\nPemain Kantoi",
+            "Mak catches player from behind",
+            "\"Jangan lambat sangat.\"",
+            "\"Don't take too long.\"",
+            "Mak mengejar dari lorong belakang.\nLarian tamat di baris terakhir.");
     }
 
     private static DeathData CreateFallbackDeathData()

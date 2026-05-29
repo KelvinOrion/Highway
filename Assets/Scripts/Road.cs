@@ -14,7 +14,6 @@ public class Road : MonoBehaviour
         public float MinGuaranteedSafeWindow;
         public float PositiveDirectionChance;
         public float WrapX;
-        public MalaysianRoadTextureController.RoadType? RoadType;
     }
 
     private const int PlayableMinX = -10;
@@ -37,21 +36,21 @@ public class Road : MonoBehaviour
     private const float MinConfigWrapX = 6f;
     private const float DefaultPositiveDirectionChance = 0.5f;
     private const float DefaultTargetReactionTime = 1f;
+    private const float MinCenterLineDashLength = 0.01f;
+    private const float MinCenterLineDashGap = 0.01f;
+    private const float MinCenterLineWidth = 0.01f;
+    private const float MinCenterLineThickness = 0.001f;
 
     [SerializeField] private List<Rigidbody> vehicles;
     [SerializeField] private RoadPotholeSpawner potholeSpawner;
-    [SerializeField] private MalaysianRoadTextureController roadTextureController;
+    [SerializeField] private Renderer[] roadSurfaceRenderers;
 
-    [Header("Road Surface")]
-    [SerializeField] private bool randomizeRoadType = true;
-    [SerializeField] private MalaysianRoadTextureController.RoadType defaultRoadType = MalaysianRoadTextureController.RoadType.MultiLaneWithEmergencyShoulder;
-    [SerializeField] private List<MalaysianRoadTextureController.RoadType> roadTypePool = new()
-    {
-        MalaysianRoadTextureController.RoadType.SingleNoLine,
-        MalaysianRoadTextureController.RoadType.SingleDoubleLine,
-        MalaysianRoadTextureController.RoadType.MultiLane,
-        MalaysianRoadTextureController.RoadType.MultiLaneWithEmergencyShoulder
-    };
+    [Header("Center Line")]
+    [SerializeField] private float centerLineDashLength = 1.2f;
+    [SerializeField] private float centerLineDashGap = 0.9f;
+    [SerializeField] private float centerLineWidth = 0.08f;
+    [SerializeField] private float centerLineThickness = 0.02f;
+    [SerializeField] private float centerLineSurfaceOffset = 0.012f;
 
     // Per-vehicle adjustments let mixed model assets share the same road logic.
     [SerializeField] private List<float> vehicleHeightOffsets = new();
@@ -62,32 +61,24 @@ public class Road : MonoBehaviour
     private float wrapMinX = WrapMinX;
     private float wrapMaxX = WrapMaxX;
     private readonly List<Rigidbody> spawnedVehicles = new();
-    private MalaysianRoadTextureController.RoadType currentRoadType;
+    private readonly List<GameObject> spawnedCenterLineDashes = new();
 
-    public MalaysianRoadTextureController.RoadType CurrentRoadType => currentRoadType;
+    private static Material centerLineMaterial;
+    private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorProperty = Shader.PropertyToID("_Color");
 
     public HashSet<int> Init(float z)
     {
         return Init(z, ChooseDefaultSpawnConfig(z));
     }
 
-    public HashSet<int> Init(float z, MalaysianRoadTextureController.RoadType roadType)
-    {
-        SpawnConfig config = ChooseDefaultSpawnConfig(z);
-        config.RoadType = roadType;
-        return Init(z, config);
-    }
-
     public HashSet<int> Init(float z, SpawnConfig config)
     {
         transform.position = new Vector3(0, 0, z);
-        currentRoadType = config.RoadType.HasValue ? config.RoadType.Value : ChooseRoadType();
-
-        roadTextureController ??= GetComponent<MalaysianRoadTextureController>();
-        roadTextureController?.SetRoadType(currentRoadType);
 
         potholeSpawner ??= GetComponent<RoadPotholeSpawner>();
         potholeSpawner?.RefreshPotholes();
+        RefreshCenterLineDashes();
 
         float positiveDirectionChance = Mathf.Clamp01(config.PositiveDirectionChance);
         if (Mathf.Approximately(positiveDirectionChance, 0f))
@@ -133,6 +124,11 @@ public class Road : MonoBehaviour
                 rotation,
                 transform);
 
+            if (HandPowerup.IsActive)
+            {
+                HandPowerup.FreezeVehicle(vehicle);
+            }
+
             spawnedVehicles.Add(vehicle);
         }
 
@@ -141,14 +137,20 @@ public class Road : MonoBehaviour
 
     private void OnValidate()
     {
-        if (roadTypePool == null)
-        {
-            roadTypePool = new List<MalaysianRoadTextureController.RoadType>();
-        }
+        centerLineDashLength = Mathf.Max(MinCenterLineDashLength, centerLineDashLength);
+        centerLineDashGap = Mathf.Max(MinCenterLineDashGap, centerLineDashGap);
+        centerLineWidth = Mathf.Max(MinCenterLineWidth, centerLineWidth);
+        centerLineThickness = Mathf.Max(MinCenterLineThickness, centerLineThickness);
+        centerLineSurfaceOffset = Mathf.Max(0f, centerLineSurfaceOffset);
     }
 
     private void FixedUpdate()
     {
+        if (HandPowerup.IsActive)
+        {
+            return;
+        }
+
         foreach (Rigidbody vehicle in spawnedVehicles)
         {
             if (vehicle == null)
@@ -183,6 +185,157 @@ public class Road : MonoBehaviour
         wrapMaxX = wrapX;
     }
 
+    private void RefreshCenterLineDashes()
+    {
+        ClearCenterLineDashes();
+
+        if (!TryGetRoadBounds(out Bounds bounds))
+        {
+            Debug.LogWarning($"{nameof(Road)} could not find road surface bounds for center line dashes.", this);
+            return;
+        }
+
+        float dashStep = centerLineDashLength + centerLineDashGap;
+        float y = bounds.max.y + centerLineSurfaceOffset + centerLineThickness * 0.5f;
+        float z = bounds.center.z;
+
+        for (float startX = bounds.min.x; startX < bounds.max.x; startX += dashStep)
+        {
+            float dashLength = Mathf.Min(centerLineDashLength, bounds.max.x - startX);
+            if (dashLength <= 0f)
+            {
+                continue;
+            }
+
+            SpawnCenterLineDash(new Vector3(startX + dashLength * 0.5f, y, z), dashLength);
+        }
+    }
+
+    private void ClearCenterLineDashes()
+    {
+        for (int i = spawnedCenterLineDashes.Count - 1; i >= 0; i--)
+        {
+            GameObject dash = spawnedCenterLineDashes[i];
+            if (dash == null)
+            {
+                continue;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(dash);
+            }
+            else
+            {
+                DestroyImmediate(dash);
+            }
+        }
+
+        spawnedCenterLineDashes.Clear();
+    }
+
+    private bool TryGetRoadBounds(out Bounds bounds)
+    {
+        Renderer[] renderers = ResolveRoadSurfaceRenderers();
+        bounds = default;
+        bool hasBounds = false;
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer roadRenderer = renderers[i];
+            if (roadRenderer == null)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                bounds = roadRenderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(roadRenderer.bounds);
+            }
+        }
+
+        return hasBounds;
+    }
+
+    private Renderer[] ResolveRoadSurfaceRenderers()
+    {
+        if (roadSurfaceRenderers != null && roadSurfaceRenderers.Length > 0)
+        {
+            return roadSurfaceRenderers;
+        }
+
+        roadSurfaceRenderers = GetComponentsInChildren<MeshRenderer>();
+        return roadSurfaceRenderers;
+    }
+
+    private void SpawnCenterLineDash(Vector3 worldPosition, float dashLength)
+    {
+        GameObject dash = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        dash.name = "Center Line Dash";
+        dash.transform.position = worldPosition;
+        dash.transform.SetParent(transform, true);
+        dash.transform.localScale = new Vector3(dashLength, centerLineThickness, centerLineWidth);
+
+        Collider dashCollider = dash.GetComponent<Collider>();
+        if (dashCollider != null)
+        {
+            Destroy(dashCollider);
+        }
+
+        Renderer dashRenderer = dash.GetComponent<Renderer>();
+        Material material = GetCenterLineMaterial();
+        if (dashRenderer != null && material != null)
+        {
+            dashRenderer.sharedMaterial = material;
+            dashRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            dashRenderer.receiveShadows = false;
+        }
+
+        spawnedCenterLineDashes.Add(dash);
+    }
+
+    private static Material GetCenterLineMaterial()
+    {
+        if (centerLineMaterial != null)
+        {
+            return centerLineMaterial;
+        }
+
+        Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ??
+                        Shader.Find("Unlit/Color") ??
+                        Shader.Find("Sprites/Default");
+        if (shader == null)
+        {
+            return null;
+        }
+
+        centerLineMaterial = new Material(shader)
+        {
+            name = "Procedural Center Line",
+            hideFlags = HideFlags.DontSave
+        };
+        SetMaterialColor(centerLineMaterial, Color.white);
+        return centerLineMaterial;
+    }
+
+    private static void SetMaterialColor(Material material, Color color)
+    {
+        if (material.HasProperty(BaseColor))
+        {
+            material.SetColor(BaseColor, color);
+        }
+
+        if (material.HasProperty(ColorProperty))
+        {
+            material.SetColor(ColorProperty, color);
+        }
+    }
+
     private float CalculateSafeGap(int vehicleCount, SpawnConfig config)
     {
         float fallbackGap = Random.Range(MinVehicleGap, MaxVehicleGap);
@@ -209,16 +362,6 @@ public class Road : MonoBehaviour
         return values != null && index >= 0 && index < values.Count ? values[index] : fallback;
     }
 
-    private MalaysianRoadTextureController.RoadType ChooseRoadType()
-    {
-        if (!randomizeRoadType || roadTypePool == null || roadTypePool.Count == 0)
-        {
-            return defaultRoadType;
-        }
-
-        return roadTypePool[Random.Range(0, roadTypePool.Count)];
-    }
-
     private SpawnConfig ChooseDefaultSpawnConfig(float z)
     {
         float progress = z / SpeedMaxDistance;
@@ -232,8 +375,7 @@ public class Road : MonoBehaviour
             ReactionTimeJitter = 0f,
             MinGuaranteedSafeWindow = 0f,
             PositiveDirectionChance = DefaultPositiveDirectionChance,
-            WrapX = WrapMaxX,
-            RoadType = ChooseRoadType()
+            WrapX = WrapMaxX
         };
     }
 

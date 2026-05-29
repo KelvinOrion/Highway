@@ -122,6 +122,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7061566212954204141}
   - component: {fileID: -4120755175235499071}
+  - component: {fileID: 5729183647281963451}
   m_Layer: 0
   m_Name: Road
   m_TagString: Untagged
@@ -165,6 +166,16 @@ MonoBehaviour:
   - {fileID: 6606540143813255742, guid: 430161996f73e7b44bab534a27b535f7, type: 3}
   - {fileID: 5192676890862465097, guid: 738b8dfedcb21e8428a06e23ed24042d, type: 3}
   - {fileID: 943712395958102394, guid: 72ffa235579be8a49bc0ff16889dfa4b, type: 3}
+  potholeSpawner: {fileID: 5729183647281963451}
+  roadSurfaceRenderers:
+  - {fileID: 853891109259397545}
+  - {fileID: 3760731564291815065}
+  - {fileID: 4943754101599217160}
+  centerLineDashLength: 1.2
+  centerLineDashGap: 0.9
+  centerLineWidth: 0.08
+  centerLineThickness: 0.02
+  centerLineSurfaceOffset: 0.012
   vehicleHeightOffsets:
   - 0
   - 0
@@ -177,6 +188,33 @@ MonoBehaviour:
   - 0
   - 0
   - 90
+--- !u!114 &5729183647281963451
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3057325126406101351}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 08f564a968b54fb6afdbcb9ec33cc433, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RoadPotholeSpawner
+  potholeSprite: {fileID: 0}
+  fallbackResourcePath: Potholes/pothole
+  sortingOrder: 50
+  potholeTint: {r: 1, g: 1, b: 1, a: 1}
+  minPotholes: 1
+  maxPotholes: 4
+  boundsSource: {fileID: 4400967741263912663}
+  surfacePlane: 0
+  edgePadding: {x: 0.5, y: 0.34}
+  minSpacing: 1.25
+  maxPlacementAttempts: 40
+  surfaceOffset: 0.06
+  diameterRange: {x: 0.45, y: 0.65}
+  randomRotation: 1
+  spawnOnStart: 0
 --- !u!1 &4352147351695101079
 GameObject:
   m_ObjectHideFlags: 0

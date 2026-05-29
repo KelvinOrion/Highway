@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 571ef1abcc134082b9aad7e8307746fb, type: 3}
+  m_Name: Durian
+  m_EditorClassIdentifier: 
+  causeName: Durian
+  headline: "Buah Durian Jatuh Mengejut,\nSeorang Terkorban"
+  headlineEN: Falling durian claims one unsuspecting victim
+  subhead: '"Mati sebab durian. Sebenarnya, memang worth it."'
+  subheadEN: '"Death by durian. Honestly, worth it."'
+  flavourText: "Wangian durian masih tercium di lokasi kejadian.\nPihak berkuasa mohon orang ramai jauhi pokok berkenaan."
